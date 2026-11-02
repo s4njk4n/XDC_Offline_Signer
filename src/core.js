@@ -19,17 +19,16 @@ export const NETS = {
 export const REQUEST_TAG = "xdcsign"; // key + version marker inside every request
 export const REQUEST_VERSION = 1;
 
+// Wallet actions, then masternode actions in lifecycle order.
 export const ACTIONS = {
   send:     "Send XDC",
   sendAll:  "Send all XDC",
   token:    "Send XRC-20 tokens",
+  cancel:   "Cancel a pending transaction",
   vote:     "Vote for a masternode candidate",
   unvote:   "Unvote from a masternode candidate",
   resign:   "Resign a masternode",
   withdraw: "Withdraw unlocked stake",
-  propose:  "Propose a new masternode",
-  kyc:      "Upload KYC",
-  cancel:   "Cancel a pending transaction",
 };
 
 /* ============================ Bytes / hex ============================ */
@@ -479,24 +478,14 @@ export function buildFromRequest(r) {
       data = encodeCall("withdraw", [bn, toBig(a.index, "withdrawal index")]);
       break;
     }
-    case "propose":
-      to = VALIDATOR;
-      value = toBig(a.amount, "stake");
-      if (value === 0n) throw new Error("stake is zero");
-      data = encodeCall("propose", [normAddr(a.candidate, "candidate (node) address")]);
-      break;
-    case "kyc": {
-      to = VALIDATOR;
-      const h = String(a.hash ?? "").trim();
-      if (!KYC_RE.test(h)) throw new Error("KYC reference must be 1 to 200 printable characters with no spaces (for example an IPFS hash)");
-      data = encodeCall("uploadKYC", [h]);
-      break;
-    }
     case "cancel":
       // 0 XDC to yourself with the stuck nonce: if mined first, it takes that nonce's place.
       to = from;
       if (gasLimit !== 21000n) throw new Error("a cancel transaction uses exactly 21,000 gas");
       break;
+    case "propose":
+    case "kyc":
+      throw new Error(`this signer doesn't create ${r.action === "kyc" ? "KYC upload" : "masternode proposal"} transactions. Use XinFin's official masternode app for those.`);
     default:
       throw new Error("unknown action: " + r.action);
   }
@@ -574,6 +563,7 @@ export function describeTx(tx, ctx = {}) {
         rows.push(["Stake", X(tx.value), `${tx.value} wei`]);
         rows.push(["Candidate (node) address", A(c), "the address of the masternode server, not your wallet", true]);
         notes.push("The candidate address must be the coinbase address of a masternode server you have set up. The stake stays locked until you resign the candidate and wait out the candidate unlock delay.");
+        warnings.push("This tool doesn't create proposal transactions. Only broadcast this if you built it yourself with another tool and have checked the candidate address.");
         break;
       case "withdraw":
         kind = "withdraw"; title = "Withdraw unlocked stake";
@@ -593,6 +583,7 @@ export function describeTx(tx, ctx = {}) {
         rows.push(["KYC reference", call.args.hash, `${call.args.hash.length} characters`, true]);
         notes.push("Only this reference (normally the IPFS hash of your KYC document) is stored, and it is public on the chain. The document itself is not part of this transaction.");
         if (!KYC_RE.test(call.args.hash)) warnings.push("The KYC reference contains spaces or unusual characters.");
+        warnings.push("This tool doesn't create KYC upload transactions. Only broadcast this if you built it yourself with another tool.");
         if (tx.value) warnings.push("Upload KYC should not carry any XDC, but this one sends " + X(tx.value) + ".");
         break;
     }

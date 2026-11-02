@@ -43,8 +43,6 @@ for (let i = 0; i < 40; i++) {
     ["unvote", { candidate: other, amount: 25000n * 10n ** 18n }],
     ["resign", { candidate: other }],
     ["withdraw", { blockNumber: 89000000n + BigInt(i), index: i }],
-    ["propose", { candidate: other, amount: 10_000_000n * 10n ** 18n }],
-    ["kyc", { hash: "Qm" + "x".repeat(i) + "YwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG" }],
     ["cancel", {}],
   ];
   for (const [action, args] of cases) {
@@ -74,7 +72,6 @@ for (let i = 0; i < 40; i++) {
       theirs.args.forEach((v, j) => assert.equal(String(Object.values(ours.args)[j]).toLowerCase(), String(v).toLowerCase()));
     }
     if (action === "cancel") { assert.equal(tx.to, from); assert.equal(tx.value, 0n); }
-    if (action === "kyc") assert.equal(C.decodeCall(tx.data).args.hash, args.hash);
     if (action === "sendAll") assert.equal(tx.value + tx.gasLimit * tx.gasPrice, args.balance);
     const desc = C.describeTx(tx, { from, meta: C.buildFromRequest(req2).meta, token: C.buildFromRequest(req2).meta.token });
     assert.equal(desc.kind, action); assert.equal(desc.warnings.length, action === "resign" ? 1 : 0, action + " " + desc.warnings);
@@ -90,7 +87,14 @@ assert.throws(() => C.buildFromRequest({ xdcsign:1, chain: 50, from: addr, nonce
 const w = Wallet.createRandom();
 const legacy = await w.signTransaction({ type: 0, nonce: 0, gasPrice: 1, gasLimit: 21000, to: addr, value: 1 }); // no chainId -> pre-155
 assert.throws(() => C.decodeRawTx(legacy), /without a chain ID/);
-assert.throws(() => C.buildFromRequest({ xdcsign:1, chain:50, from: addr, nonce:0, gasPrice:"1", gas:21000, action:"kyc", args:{hash:"has space"} }), /KYC reference/);
+// Propose and KYC are no longer built, but are still recognised and flagged
+for (const action of ["propose", "kyc"]) assert.throws(() => C.buildFromRequest({ xdcsign:1, chain:50, from: addr, nonce:0, gasPrice:"1", gas:300000, action, args:{ candidate: addr, amount: "1", hash: "Qm" } }), /doesn't create/);
+for (const [fn, a, value] of [["propose", [addr], 10n ** 25n], ["uploadKYC", ["QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG"], 0n]]) {
+  const d = C.describeTx({ chainId: 50n, nonce: 0n, gasPrice: 1n, gasLimit: 300000n, to: C.VALIDATOR, value, data: C.encodeCall(fn, a) }, { from: addr });
+  assert.equal(d.kind, fn === "propose" ? "propose" : "kyc");
+  assert.ok(d.warnings.some((w) => /doesn't create/.test(w)));
+  const ifc = iface.parseTransaction({ data: C.encodeCall(fn, a) }); assert.equal(ifc.name, fn);
+}
 assert.throws(() => C.buildFromRequest({ xdcsign:1, chain:50, from: addr, nonce:0, gasPrice:"1", gas:30000, action:"cancel", args:{} }), /21,000/);
 // a malformed display-only info value can't break the review
 const wtx = C.buildFromRequest(C.makeRequest({ chainId: 50, from: addr, nonce: 1, gasPrice: 1n, gasLimit: 300000, action: "withdraw", args: { blockNumber: 5n, index: 0 } })).tx;

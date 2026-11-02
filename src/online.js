@@ -175,7 +175,7 @@ document.querySelectorAll("[data-scan-into]").forEach((b) => b.addEventListener(
 
 /* ================= 1. Account ================= */
 function resetAccount() {
-  S.balance = S.nonce = S.gasPrice = null; S.withdrawals = null; S.mine = null; S.token = null; S.cand = null;
+  S.balance = S.nonce = S.gasPrice = null; S.withdrawals = null; updateWdBadge(); S.mine = null; S.token = null; S.cand = null;
   $("acct").hidden = true; $("g1").classList.remove("done");
   $("pickHint").hidden = false; $("pickHint").textContent = "Load your wallet first.";
   clearPrepared();
@@ -216,6 +216,7 @@ async function loadAccount() {
     $("pickHint").hidden = !!S.action;
     $("pickHint").textContent = "Pick one to continue.";
     if (S.action) pick(S.action);
+    readWithdrawals().catch(() => {});
     if (!S.scrolledOnce) { S.scrolledOnce = true; $("g2").scrollIntoView({ behavior: "smooth", block: "start" }); }
   } catch (e) { notice($("acctMsg"), "error", errMsg(e)); }
   finally { $("load").disabled = false; }
@@ -224,7 +225,7 @@ $("load").addEventListener("click", loadAccount);
 $("addr").addEventListener("keydown", (e) => { if (e.key === "Enter") loadAccount(); });
 
 /* ================= 2. Choose ================= */
-const PANEL = { send: "f-send", token: "f-token", vote: "f-cand", unvote: "f-cand", resign: "f-cand", withdraw: "f-withdraw", propose: "f-propose", kyc: "f-kyc", cancel: "f-cancel" };
+const PANEL = { send: "f-send", token: "f-token", vote: "f-cand", unvote: "f-cand", resign: "f-cand", withdraw: "f-withdraw", cancel: "f-cancel" };
 document.querySelectorAll("#picker button").forEach((b) => b.addEventListener("click", () => pick(b.dataset.a)));
 
 function pick(a) {
@@ -238,35 +239,7 @@ function pick(a) {
   $("prep").className = a === "resign" ? "btn btn-danger" : "btn btn-primary";
   if (PANEL[a] === "f-cand") setupCand();
   if (a === "withdraw") loadWithdrawals();
-  if (a === "propose") setupPropose();
-  if (a === "kyc") setupKyc();
   if (a === "cancel") setupCancel();
-}
-
-// ---- Propose / KYC
-async function kycStatus() {
-  const [cnt, owned] = await Promise.all([
-    vcall(C.encodeView(C.VIEWS.getHashCount, ["address"], [S.addr])).then(C.decUint),
-    vcall(C.encodeView(C.VIEWS.ownerToCandidate, ["address", "uint256"], [S.addr, 0n])).then(() => true, (e) => { if (e instanceof RpcError) return false; throw e; }),
-  ]);
-  let latest = "";
-  if (cnt > 0n) latest = await vcall(C.encodeView(C.VIEWS.getLatestKYC, ["address"], [S.addr])).then(C.decString).catch(() => "");
-  return { count: cnt, owned, latest };
-}
-function setupPropose() {
-  $("propHint").textContent = "";
-  Promise.all([params(), kycStatus()]).then(([p, k]) => {
-    if (!$("propAmt").value) $("propAmt").value = C.formatUnits(p.minCandidateCap, 18, false);
-    $("propHint").innerHTML = `Minimum: ${esc(X(p.minCandidateCap))}. ` + (k.owned ? "This wallet has owned a masternode before, so no new KYC is needed."
-      : k.count > 0n ? "KYC is on file for this wallet." : `<b>No KYC on file for this wallet.</b> Use Upload KYC first.`);
-  }).catch((e) => ($("propHint").textContent = "Couldn't read the contract: " + e.message));
-}
-function setupKyc() {
-  $("kycInfo").textContent = "";
-  kycStatus().then((k) => {
-    $("kycInfo").innerHTML = k.count > 0n ? `This wallet has uploaded KYC ${k.count} time(s). Latest: <b class="mono">${esc(k.latest)}</b>`
-      : k.owned ? "This wallet has owned a masternode before, so it can propose without uploading KYC." : "No KYC on file for this wallet yet.";
-  }).catch(() => {});
 }
 
 // XDC RPCs can return addresses with an "xdc" prefix in JSON fields; compare in 0x form.
@@ -418,18 +391,36 @@ $("findMine").addEventListener("click", async () => {
 });
 
 // ---- Withdrawals
+async function readWithdrawals() {
+  const [nums, bn] = await Promise.all([vcall(C.VIEWS.getWithdrawBlockNumbers, S.addr), rpc("eth_blockNumber")]);
+  S.block = BigInt(bn);
+  const blocks = C.decArray(nums, "uint");
+  const seen = new Set(), entries = [];
+  blocks.forEach((b, index) => { if (b > 0n && !seen.has(b)) { seen.add(b); entries.push({ blockNumber: b, index }); } });
+  const caps = await Promise.all(entries.map((e) => vcall(C.encodeView(C.VIEWS.getWithdrawCap, ["uint256"], [e.blockNumber]), S.addr)));
+  entries.forEach((e, i) => (e.cap = C.decUint(caps[i])));
+  S.withdrawals = entries.filter((e) => e.cap > 0n);
+  updateWdBadge();
+  return S.withdrawals;
+}
+// The Withdraw button says whether anything is waiting, so unlocked stake isn't forgotten.
+function updateWdBadge() {
+  const el = $("wdBadge"), list = S.withdrawals || [];
+  const ready = list.filter((e) => S.block >= e.blockNumber), locked = list.length - ready.length;
+  const btn = el.closest("button");
+  btn.classList.toggle("has-ready", ready.length > 0);
+  if (!list.length) { el.textContent = "Collect stake after its unlock delay"; return; }
+  const sum = ready.reduce((a, e) => a + e.cap, 0n);
+  el.textContent = ready.length
+    ? `${ready.length} ready (${X(sum)})${locked ? `, ${locked} still locked` : ""}`
+    : `${locked} entr${locked === 1 ? "y" : "ies"} still locked`;
+}
+
 async function loadWithdrawals() {
   const box = $("wdBox");
   box.innerHTML = `<p class="notice"><span class="progress"><span class="spinner"></span>Reading your withdrawal queue…</span></p>`;
   try {
-    const [nums, bn, p] = await Promise.all([vcall(C.VIEWS.getWithdrawBlockNumbers, S.addr), rpc("eth_blockNumber"), params()]);
-    S.block = BigInt(bn);
-    const blocks = C.decArray(nums, "uint");
-    const seen = new Set(), entries = [];
-    blocks.forEach((b, index) => { if (b > 0n && !seen.has(b)) { seen.add(b); entries.push({ blockNumber: b, index }); } });
-    const caps = await Promise.all(entries.map((e) => vcall(C.encodeView(C.VIEWS.getWithdrawCap, ["uint256"], [e.blockNumber]), S.addr)));
-    entries.forEach((e, i) => (e.cap = C.decUint(caps[i])));
-    S.withdrawals = entries.filter((e) => e.cap > 0n);
+    const [, p] = await Promise.all([readWithdrawals(), params()]);
     if (!S.withdrawals.length) {
       box.innerHTML = `<p class="notice">Nothing in the withdrawal queue for this wallet. Unvoting or resigning puts stake here; it unlocks after ${p.voterDelay} blocks (about ${dur(p.voterDelay)}) for unvotes, or ${p.candDelay} blocks (about ${dur(p.candDelay)}) after resigning.</p>`;
       return;
@@ -542,28 +533,6 @@ async function prepare(extra = {}) {
       }
     }
 
-    else if (action === "propose") {
-      const cand = C.normAddr($("propCand").value, "candidate (node) address");
-      const [p, k, isC] = await Promise.all([params(), kycStatus(), vcall(C.encodeView(C.VIEWS.isCandidate, ["address"], [cand])).then(C.decBool)]);
-      if (isC) throw new Error("that address is already an active masternode candidate");
-      if (!k.owned && k.count === 0n) throw new Error("this wallet has no KYC on file and has never owned a masternode, so the contract will refuse the proposal. Use Upload KYC first.");
-      value = C.parseUnits($("propAmt").value, 18);
-      if (value < p.minCandidateCap) throw new Error(`the minimum stake to propose is ${X(p.minCandidateCap)}`);
-      to = C.VALIDATOR; data = C.encodeCall("propose", [cand]);
-      gasLimit = o.gl || await estimate(to, value, data);
-      if (value + gasLimit * gasPrice > S.balance) throw new Error(`not enough XDC: the stake plus fees is up to ${X(value + gasLimit * gasPrice)}, but the balance is ${X(S.balance)}`);
-      args = { candidate: cand, amount: value };
-      if (cand === S.addr) warn.push("The candidate address is this owner wallet. Normally it is your masternode server's own coinbase address. Check this is what you intend.");
-    }
-
-    else if (action === "kyc") {
-      const h = $("kycIn").value.trim();
-      if (!C.KYC_RE.test(h)) throw new Error("enter the KYC reference: 1 to 200 printable characters, no spaces");
-      to = C.VALIDATOR; data = C.encodeCall("uploadKYC", [h]);
-      gasLimit = o.gl || await estimate(to, 0n, data);
-      args = { hash: h };
-    }
-
     else if (action === "cancel") {
       const n = C.toBig($("cnNonce").value, "nonce");
       if (n < S.latestNonce) throw new Error(`nonce ${n} is already used (mined); the oldest pending nonce is ${S.latestNonce}`);
@@ -627,7 +596,7 @@ function clearPrepared() {
 const LABELS = {
   to: "Recipient address", amount: "Amount", balance: "Exact current balance", token: "Token contract address",
   decimals: "Token decimals", symbol: "Token symbol", candidate: "Candidate (masternode) address",
-  blockNumber: "Unlock block number", index: "Queue index", hash: "KYC reference (IPFS hash)",
+  blockNumber: "Unlock block number", index: "Queue index",
 };
 function showRequest(req, built) {
   const text = JSON.stringify(req);
@@ -667,8 +636,29 @@ $("sigImg").addEventListener("change", async (e) => {
 });
 $("sigUse").addEventListener("click", () => checkSigned($("sigPaste").value));
 $("bcClear").addEventListener("click", clearChecked);
+
+// What to do next after a successful masternode transaction.
+async function nextStep(c, minedIn) {
+  const kind = c.desc.kind;
+  const go = (a, label) => ` <button type="button" class="btn btn-primary btn-small" data-goto="${a}" style="margin-top:0.6rem">${esc(label)}</button>`;
+  if (kind === "unvote" || kind === "resign") {
+    const p = await params();
+    const delay = kind === "unvote" ? p.voterDelay : p.candDelay;
+    const at = minedIn + delay;
+    const when = new Date(Date.now() + Number(delay) * BLOCK_SECONDS * 1000);
+    return `<br><strong>Next:</strong> this stake can be withdrawn from block ${at}, about ${esc(dur(delay))} from now (around ${esc(when.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }))}). Come back then and use Withdraw; the Withdraw button will show it as ready.`;
+  }
+  if (kind === "withdraw") {
+    const list = await readWithdrawals();
+    const ready = list.filter((e) => S.block >= e.blockNumber);
+    if (ready.length) return `<br><strong>Next:</strong> ${ready.length} more entr${ready.length === 1 ? "y is" : "ies are"} ready to withdraw.` + go("withdraw", "Withdraw the next one");
+  }
+  return "";
+}
 document.addEventListener("click", (e) => {
   if (e.target && e.target.id === "again") { clearChecked(); $("g2").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  const g = e.target && e.target.dataset && e.target.dataset.goto;
+  if (g) { clearChecked(); pick(g); $("g2").scrollIntoView({ behavior: "smooth", block: "start" }); }
 });
 
 function clearChecked() {
@@ -807,9 +797,12 @@ $("bcBtn").addEventListener("click", async () => {
     let receipt = null;
     for (let i = 0; i < 45 && !receipt; i++) { await sleep(2000); receipt = await rpc("eth_getTransactionReceipt", [hash]).catch(() => null); }
     if (!receipt) notice($("bcMsg"), "warn", `Broadcast, not mined yet. Follow it on the explorer: ${link}`);
-    else if (Number(receipt.status) === 1) notice($("bcMsg"), "ok", `<strong>Done.</strong> ${esc(c.desc.title)} confirmed in block ${Number(receipt.blockNumber)}. ${link}<br><button type="button" class="btn btn-ghost btn-small" id="again" style="margin-top:0.6rem">Start another transaction</button>`);
+    else if (Number(receipt.status) === 1) {
+      const next = await nextStep(c, BigInt(receipt.blockNumber)).catch(() => "");
+      notice($("bcMsg"), "ok", `<strong>Done.</strong> ${esc(c.desc.title)} confirmed in block ${Number(receipt.blockNumber)}. ${link}${next}<br><button type="button" class="btn btn-ghost btn-small" id="again" style="margin-top:0.6rem">Start another transaction</button>`);
+    }
     else notice($("bcMsg"), "error", `<strong>The transaction was mined but failed</strong> (reverted). The fee was spent. ${link}`);
-    if (S.addr && S.addr === c.d.from) refreshAccount().then(() => { if (S.action === "withdraw") loadWithdrawals(); }).catch(() => {});
+    if (S.addr && S.addr === c.d.from) refreshAccount().then(() => (S.action === "withdraw" ? loadWithdrawals() : readWithdrawals())).catch(() => {});
   } catch (e) {
     notice($("bcMsg"), "error", "The network refused it: " + errMsg(e));
     $("bcBtn").disabled = false;

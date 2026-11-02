@@ -87,6 +87,7 @@ async function decodeCanvasQR(page, sel) {
   await on.click("#load");
   await on.waitForSelector("#acct:not([hidden])");
   console.log("online loaded", addrText, await on.textContent("#sBal"));
+  assert.deepEqual(await on.$$eval("#picker .picker:last-of-type button", (b) => b.map((x) => x.dataset.a)), ["vote", "unvote", "resign", "withdraw"]);
 
   let shotN = 0;
   async function prepare(action, fill, opts = {}) {
@@ -141,7 +142,7 @@ async function decodeCanvasQR(page, sel) {
     const msg = await on.textContent("#bcMsg");
     assert.match(msg, /Done\./, msg);
     if (opts.shot) await (await on.$("#g4")).screenshot({ path: `${SHOTS}/online-done-${opts.shot}.png` });
-    await on.click("#bcClear");
+    if (!opts.keepMsg) await on.click("#bcClear");
     return checks;
   }
 
@@ -163,8 +164,12 @@ async function decodeCanvasQR(page, sel) {
   // 2. Unvote max (30)
   q = await prepare("unvote", async () => { await on.fill("#cand", C1); await on.click("#candLook"); await on.waitForFunction(() => /your stake/.test(document.querySelector("#candInfo").textContent)); await on.click("#candMax"); await on.waitForFunction(() => document.querySelector("#candAmt").value === "30"); });
   raw = await signOffline(q, "Unvote from a masternode candidate");
-  await broadcast(raw, "Unvote from a masternode candidate");
+  await broadcast(raw, "Unvote from a masternode candidate", { keepMsg: true });
   assert.equal(await val.getVoterCap(C1, T.address), X(100));
+  assert.match(await on.textContent("#bcMsg"), /can be withdrawn from block \d+/);
+  await on.click("#bcClear");
+  await on.waitForFunction(() => /still locked/.test(document.querySelector("#wdBadge").textContent));
+  console.log("✓ after unvote: next step names the unlock block; Withdraw button shows it locked");
   console.log("✓ unvote (Use maximum respected the owner minimum)");
 
   // 3. Withdraw: locked first, then after blocks
@@ -172,6 +177,8 @@ async function decodeCanvasQR(page, sel) {
   await on.waitForSelector("#wdBox table");
   assert.match(await on.textContent("#wdBox"), /Locked/);
   for (let i = 0; i < 3; i++) await prov.send("evm_mine", []);
+  await on.click("#load"); await on.waitForFunction(() => /1 ready/.test(document.querySelector("#wdBadge").textContent));
+  console.log("✓ Withdraw button shows the entry as ready once unlocked");
   let before = await bal();
   q = await prepare("withdraw", null, { withdrawRow: 0, shot: true });
   raw = await signOffline(q, "Withdraw unlocked stake", { shot: "withdraw" });
@@ -234,33 +241,11 @@ async function decodeCanvasQR(page, sel) {
   assert.ok(checks.some((c) => /already been used/.test(c)));
   console.log("✓ re-broadcast of a used nonce is blocked");
 
-  // 8a. Upload KYC
-  q = await prepare("kyc", async () => { await on.fill("#kycIn", "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG"); });
-  raw = await signOffline(q, "Upload KYC", { shot: "kyc" });
-  await broadcast(raw, "Upload KYC", { shot: "kyc" });
-  assert.equal(await val.getLatestKYC(T.address), "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG");
-  console.log("✓ upload KYC");
-
-  // 8b. Propose a new candidate (min stake is prefilled from the contract)
-  const C3 = ethers.Wallet.createRandom().address;
-  q = await prepare("propose", async () => {
-    await on.waitForFunction(() => /Minimum/.test(document.querySelector("#propHint").textContent));
-    assert.equal(await on.inputValue("#propAmt"), "100");
-    await on.fill("#propCand", "xdc" + C3.slice(2));
-  }, { shot: true });
-  raw = await signOffline(q, "Propose a new masternode", { shot: "propose" });
-  await broadcast(raw, "Propose a new masternode", { shot: "propose" });
-  assert.equal(await val.isCandidate(C3), true);
-  assert.equal(await val.getCandidateOwner(C3), T.address);
-  console.log("✓ propose: new candidate registered with this wallet as owner");
-
-  // 8c. A wallet with no KYC and no history is refused before signing
-  const W = ethers.Wallet.createRandom();
-  await (await F.sendTransaction({ to: W.address, value: X(500) })).wait();
-  await on.fill("#addr", W.address); await on.click("#load"); await on.waitForFunction(() => !document.querySelector("#acctMsg .spinner"));
-  await prepare("propose", async () => { await on.fill("#propCand", ethers.Wallet.createRandom().address); }, { expectError: /no KYC on file/ });
-  await on.fill("#addr", T.address); await on.click("#load"); await on.waitForFunction(() => !document.querySelector("#acctMsg .spinner"));
-  console.log("✓ propose refused for a wallet without KYC");
+  // 8a. The signer refuses to build a proposal even from a hand-crafted request
+  const crafted = { ...JSON.parse(q), action: "propose", args: { candidate: ethers.Wallet.createRandom().address, amount: X(100).toString() }, gas: 600000 };
+  await off.click('#reqSeg button[data-tab="paste"]'); await off.fill("#pasteIn", JSON.stringify(crafted)); await off.click("#pasteUse");
+  assert.match(await off.textContent("#reqMsg"), /doesn't create masternode proposal/);
+  console.log("✓ signer refuses to build a proposal request");
 
   // 8d. Cancel a genuinely stuck transaction
   await prov.send("miner_stop", []);

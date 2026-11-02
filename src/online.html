@@ -158,14 +158,12 @@
                 <button type="button" data-a="token" aria-pressed="false"><b>Send tokens</b><small>XRC-20, any amount or the full balance</small></button>
                 <button type="button" data-a="cancel" aria-pressed="false"><b>Cancel stuck</b><small>Replace a pending transaction</small></button>
               </div>
-              <p class="pgroup">Masternode</p>
+              <p class="pgroup">Masternode, in the order you'd normally use them</p>
               <div class="picker">
                 <button type="button" data-a="vote" aria-pressed="false"><b>Vote</b><small>Stake XDC on a masternode candidate</small></button>
                 <button type="button" data-a="unvote" aria-pressed="false"><b>Unvote</b><small>Take stake off a candidate</small></button>
-                <button type="button" data-a="withdraw" aria-pressed="false"><b>Withdraw</b><small>Collect stake after its unlock delay</small></button>
                 <button type="button" data-a="resign" aria-pressed="false"><b>Resign</b><small>Retire a masternode you own</small></button>
-                <button type="button" data-a="propose" aria-pressed="false"><b>Propose</b><small>Register a new masternode candidate</small></button>
-                <button type="button" data-a="kyc" aria-pressed="false"><b>Upload KYC</b><small>Record a KYC hash before a first proposal</small></button>
+                <button type="button" data-a="withdraw" aria-pressed="false"><b>Withdraw</b><small id="wdBadge">Collect stake after its unlock delay</small></button>
               </div>
             </div>
             <p class="hint" id="pickHint">Load your wallet first.</p>
@@ -222,30 +220,6 @@
             <!-- withdraw -->
             <div class="group-body" id="f-withdraw" hidden>
               <div id="wdBox"><p class="hint">Loading your withdrawal queue…</p></div>
-            </div>
-
-            <!-- propose -->
-            <div class="group-body" id="f-propose" hidden>
-              <div class="field">
-                <label for="propCand">Candidate (node) address</label>
-                <div class="inline"><input id="propCand" class="mono" spellcheck="false" autocomplete="off" placeholder="xdc…"><button type="button" class="btn btn-ghost" data-scan-into="propCand"><svg aria-hidden="true"><use href="#i-scan"/></svg>Scan</button></div>
-                <p class="hint">The coinbase address of your new masternode server, not this wallet.</p>
-              </div>
-              <div class="field">
-                <label for="propAmt">Stake</label>
-                <div class="amount"><input id="propAmt" inputmode="decimal" autocomplete="off"><span class="suffix sym">XDC</span></div>
-                <p class="hint" id="propHint"></p>
-              </div>
-            </div>
-
-            <!-- kyc -->
-            <div class="group-body" id="f-kyc" hidden>
-              <p class="infoline" id="kycInfo"></p>
-              <div class="field">
-                <label for="kycIn">KYC document reference</label>
-                <input id="kycIn" class="mono" spellcheck="false" autocomplete="off" placeholder="Qm…">
-                <p class="hint">Usually the IPFS hash of your KYC document, as issued by the XDC masternode onboarding process. It is stored publicly on the chain. Wallets that have owned a masternode before don't need this to propose again.</p>
-              </div>
             </div>
 
             <!-- cancel -->
@@ -363,7 +337,6 @@
           <div><h3>Unvote, then withdraw</h3><p>Unvoting and resigning don't pay anything out. They move the stake into your withdrawal queue with an unlock block. Once the chain passes that block, the Withdraw tab lists the entry as ready and you sign one Withdraw transaction per entry.</p></div>
           <div><h3>Resigning</h3><p>Only the wallet that proposed the masternode can resign it. The candidate leaves the masternode set for good, and your own stake on it waits out the candidate unlock delay, which is longer than the voter delay. Other people's votes on it stay theirs to unvote.</p></div>
           <div><h3>Tokens</h3><p>Token transfers pay their fee in XDC, so the wallet needs a little XDC as well. The token's symbol and decimals are read from the chain here and passed to the signer for display; the signer also shows the raw amount so you can confirm the decimals.</p></div>
-          <div><h3>Proposing a masternode</h3><p>Propose registers a server's coinbase address as a candidate, with this wallet as owner, and stakes at least the minimum candidate amount (read from the contract). Wallets that have owned a candidate before can propose again without new KYC. First-time owners upload a KYC reference first. To move a masternode to a new server, resign the old candidate and propose the new one; the old stake is withdrawable after the candidate unlock delay.</p></div>
           <div><h3>Stuck transactions</h3><p>If a broadcast transaction sits unmined, for example because its gas price was too low, Cancel stuck sends 0 XDC to yourself with the same nonce and a higher gas price. Whichever is mined first wins, so at worst the cancel is rejected and costs nothing.</p></div>
           <div><h3>Your choice of RPC</h3><p>Reads and broadcasts use the free public <a href="/go/plugin-rpc/?from=offline-signer" data-goatcounter-click="referral/plugin-rpc/offline-signer">Plugin XDC RPC</a> by default, with the XinFin public RPCs as fallbacks. Under Network settings you can use your own node. It's saved only in this browser.</p></div>
           <div><h3>Transaction format</h3><p>Transactions are standard legacy XDC transactions with EIP-155 replay protection, so a signature for Mainnet (chain ID 50) can't be replayed on Apothem (51) or any other chain.</p></div>

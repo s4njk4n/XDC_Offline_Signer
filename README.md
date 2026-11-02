@@ -17,11 +17,11 @@ The system has two halves that talk to each other only through QR codes:
 - **Unvote** from a candidate. This respects the owner rule: an owner must leave at least the minimum candidate stake.
 - **Resign** a masternode you own.
 - **Withdraw** stake from the withdrawal queue once its unlock block has passed (one transaction per queue entry).
-- **Propose** a new masternode candidate (your server's coinbase address, with this wallet as owner). Wallets that have owned a candidate before can propose again without new KYC, so moving a masternode to a new server is resign, then propose.
-- **Upload KYC**: records a KYC reference (IPFS hash) for first-time owners, which the contract requires before their first proposal.
 - **Cancel a stuck transaction**: 0 XDC to yourself with the stuck nonce and a higher gas price. The page finds pending transactions and their gas price from the node's transaction pool when the RPC allows it. A **nonce override** under Gas settings replaces a stuck transaction with any other action instead.
 
 The online page also has a **Find candidates I have stake on / I own** helper. It scans the candidate list so you don't need to type masternode addresses.
+
+**Deliberately not included:** proposing a new masternode and uploading KYC. These are one-off steps for first-time owners, they involve the largest sums and off-chain paperwork, and XinFin's official masternode app handles them. Both devices still *recognise* these transactions if one is scanned or pasted, and warn that this tool didn't build it.
 
 ## How a transaction travels
 
@@ -109,7 +109,7 @@ npm test          # core: 400 transactions cross-checked against ethers.js; keys
 npm run test:e2e  # full browser run against a local chain (chain ID 50) with the real XDCValidator at 0x…88
 ```
 
-The end-to-end test compiles the XDPoSChain `XDCValidator.sol`, installs it at `0x…88`, and drives both pages in Chromium. Every request and signed transaction is passed as a rendered QR image and decoded with jsQR. It runs these steps: vote → unvote (max) → withdraw → find-my-candidates → resign → withdraw; token transfer and token send-all; send; replayed-nonce blocking; upload KYC; propose; refusing a proposal from a wallet without KYC; cancelling a genuinely stuck transaction (mining paused); send-all leaving exactly 0; wrong-key refusal; recovery-phrase auto-discovery on the XDC path, an old-wallet path and a custom path; the address browser; manual entry. It needs `python3 -m http.server 8080` serving the parent folder of this repo.
+The end-to-end test compiles the XDPoSChain `XDCValidator.sol`, installs it at `0x…88`, and drives both pages in Chromium. Every request and signed transaction is passed as a rendered QR image and decoded with jsQR. It runs these steps: vote → unvote (max) → withdraw → find-my-candidates → resign → withdraw; token transfer and token send-all; send; replayed-nonce blocking; cancelling a genuinely stuck transaction (mining paused); send-all leaving exactly 0; wrong-key refusal; recovery-phrase auto-discovery on the XDC path, an old-wallet path and a custom path; the address browser; manual entry. It needs `python3 -m http.server 8080` serving the parent folder of this repo.
 
 ## Request format (v1)
 
@@ -129,8 +129,6 @@ The QR code shown by the online page is compact JSON:
 | `unvote` | `candidate`, `amount` (wei) |
 | `resign` | `candidate` |
 | `withdraw` | `blockNumber`, `index` (position in `getWithdrawBlockNumbers()`) |
-| `propose` | `candidate` (node address), `amount` (wei stake, sent as value) |
-| `kyc` | `hash` (1–200 printable characters, no spaces) |
 | `cancel` | none; 0 XDC to `from`, gas exactly 21,000, using the stuck nonce |
 
 Optional `info` holds display-only context (for example, the expected withdraw amount). It never affects the signed bytes.

@@ -213,11 +213,9 @@ const FIELDS = {
   unvote:   [["candidate", "Candidate (masternode) address", "addr"], ["amount", "Amount to unvote", "xdc"]],
   resign:   [["candidate", "Candidate (masternode) address", "addr"]],
   withdraw: [["blockNumber", "Unlock block number", "int"], ["index", "Queue index", "int"]],
-  propose:  [["candidate", "Candidate (node) address", "addr"], ["amount", "Stake", "xdc"]],
-  kyc:      [["hash", "KYC reference (IPFS hash)", "str"]],
   cancel:   [],
 };
-const DEFAULT_GAS = { send: 21000, sendAll: 21000, token: 120000, vote: 500000, unvote: 500000, resign: 500000, withdraw: 500000, propose: 600000, kyc: 400000, cancel: 21000 };
+const DEFAULT_GAS = { send: 21000, sendAll: 21000, token: 120000, vote: 500000, unvote: 500000, resign: 500000, withdraw: 500000, cancel: 21000 };
 for (const [k, v] of Object.entries(C.ACTIONS)) $("mAction").add(new Option(v, k));
 
 function drawManual() {

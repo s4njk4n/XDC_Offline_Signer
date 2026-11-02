@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-DJHaG4N9p/CjnRS2xOgTZOi7hyMuBCIlnB4A0rvM/WY='; style-src 'unsafe-inline'; img-src data: blob:; media-src blob: mediastream:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-7INvUbFN8wR42f7bcs54wi4zyo+Motf03604qfg6uSI='; style-src 'unsafe-inline'; img-src data: blob:; media-src blob: mediastream:; connect-src 'none'; form-action 'none'; base-uri 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="license" content="MIT">
-  <title>XDC Offline Signer 1.1.3</title>
+  <title>XDC Offline Signer 1.2.0</title>
   <style>/* ---- Shared XDC Outpost tokens ---- */
 :root {
   --night: #1E1A4A; --deep: #19163F; --dusk: #2B2566; --line: #443D84;
@@ -183,6 +183,8 @@ ul.checks li.warn::before { content: "!"; color: var(--amber); text-align: cente
 .qrzoom { position: fixed; inset: 0; z-index: 60; background: #fff; display: grid; place-items: center; align-content: center; gap: 1rem; padding: 3vmin; cursor: zoom-out; }
 .qrzoom canvas { width: min(94vw, 86vh); height: auto; image-rendering: pixelated; }
 .qrzoom p { margin: 0; color: #444; font-size: 0.9rem; }
+.picker button.has-ready { border-color: var(--ok); }
+.picker button.has-ready small { color: var(--ok); }
 .pgroup { margin: 0.25rem 0 -0.35rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mist); }
 #picker { display: grid; gap: 0.75rem; }
 .qrbox .cap { margin: 0; color: var(--mist); font-size: 0.875rem; text-align: center; }
@@ -269,7 +271,7 @@ ul.checks li { grid-template-columns: 1.4rem minmax(0, 1fr); }
     <div class="wrap">
       <div class="crumbs topbar">
         <span class="brand"><svg aria-hidden="true"><use href="#i-beacon"/></svg>XDC Offline Signer</span>
-        <span class="ver">v1.1.3</span>
+        <span class="ver">v1.2.0</span>
       </div>
       <span class="netpill" id="netPill"><span class="dot"></span><span id="netText">No network</span></span>
     </div>
@@ -498,7 +500,7 @@ ul.checks li { grid-template-columns: 1.4rem minmax(0, 1fr); }
 
   <footer class="site-footer">
     <div class="wrap">
-      <p>XDC Offline Signer v1.1.3 · MIT licence · by s4njk4n · xdcoutpost.xyz</p>
+      <p>XDC Offline Signer v1.2.0 · MIT licence · by s4njk4n · xdcoutpost.xyz</p>
       <p>SHA-256 of this file is published with each release.</p>
     </div>
   </footer>
@@ -13355,13 +13357,11 @@ ul.checks li { grid-template-columns: 1.4rem minmax(0, 1fr); }
     send: "Send XDC",
     sendAll: "Send all XDC",
     token: "Send XRC-20 tokens",
+    cancel: "Cancel a pending transaction",
     vote: "Vote for a masternode candidate",
     unvote: "Unvote from a masternode candidate",
     resign: "Resign a masternode",
-    withdraw: "Withdraw unlocked stake",
-    propose: "Propose a new masternode",
-    kyc: "Upload KYC",
-    cancel: "Cancel a pending transaction"
+    withdraw: "Withdraw unlocked stake"
   };
   var keccak = (b) => keccak_256(b);
   var toHex = (b) => "0x" + bytesToHex(b);
@@ -13752,23 +13752,13 @@ ul.checks li { grid-template-columns: 1.4rem minmax(0, 1fr); }
         data = encodeCall("withdraw", [bn, toBig(a.index, "withdrawal index")]);
         break;
       }
-      case "propose":
-        to = VALIDATOR;
-        value = toBig(a.amount, "stake");
-        if (value === 0n) throw new Error("stake is zero");
-        data = encodeCall("propose", [normAddr(a.candidate, "candidate (node) address")]);
-        break;
-      case "kyc": {
-        to = VALIDATOR;
-        const h = String(a.hash ?? "").trim();
-        if (!KYC_RE.test(h)) throw new Error("KYC reference must be 1 to 200 printable characters with no spaces (for example an IPFS hash)");
-        data = encodeCall("uploadKYC", [h]);
-        break;
-      }
       case "cancel":
         to = from;
         if (gasLimit !== 21000n) throw new Error("a cancel transaction uses exactly 21,000 gas");
         break;
+      case "propose":
+      case "kyc":
+        throw new Error(`this signer doesn't create ${r.action === "kyc" ? "KYC upload" : "masternode proposal"} transactions. Use XinFin's official masternode app for those.`);
       default:
         throw new Error("unknown action: " + r.action);
     }
@@ -13846,6 +13836,7 @@ ul.checks li { grid-template-columns: 1.4rem minmax(0, 1fr); }
           rows.push(["Stake", X(tx.value), `${tx.value} wei`]);
           rows.push(["Candidate (node) address", A(c), "the address of the masternode server, not your wallet", true]);
           notes.push("The candidate address must be the coinbase address of a masternode server you have set up. The stake stays locked until you resign the candidate and wait out the candidate unlock delay.");
+          warnings.push("This tool doesn't create proposal transactions. Only broadcast this if you built it yourself with another tool and have checked the candidate address.");
           break;
         case "withdraw":
           kind = "withdraw";
@@ -13870,6 +13861,7 @@ ul.checks li { grid-template-columns: 1.4rem minmax(0, 1fr); }
           rows.push(["KYC reference", call.args.hash, `${call.args.hash.length} characters`, true]);
           notes.push("Only this reference (normally the IPFS hash of your KYC document) is stored, and it is public on the chain. The document itself is not part of this transaction.");
           if (!KYC_RE.test(call.args.hash)) warnings.push("The KYC reference contains spaces or unusual characters.");
+          warnings.push("This tool doesn't create KYC upload transactions. Only broadcast this if you built it yourself with another tool.");
           if (tx.value) warnings.push("Upload KYC should not carry any XDC, but this one sends " + X(tx.value) + ".");
           break;
       }
@@ -19354,11 +19346,9 @@ zoo`.split("\n");
     unvote: [["candidate", "Candidate (masternode) address", "addr"], ["amount", "Amount to unvote", "xdc"]],
     resign: [["candidate", "Candidate (masternode) address", "addr"]],
     withdraw: [["blockNumber", "Unlock block number", "int"], ["index", "Queue index", "int"]],
-    propose: [["candidate", "Candidate (node) address", "addr"], ["amount", "Stake", "xdc"]],
-    kyc: [["hash", "KYC reference (IPFS hash)", "str"]],
     cancel: []
   };
-  var DEFAULT_GAS = { send: 21e3, sendAll: 21e3, token: 12e4, vote: 5e5, unvote: 5e5, resign: 5e5, withdraw: 5e5, propose: 6e5, kyc: 4e5, cancel: 21e3 };
+  var DEFAULT_GAS = { send: 21e3, sendAll: 21e3, token: 12e4, vote: 5e5, unvote: 5e5, resign: 5e5, withdraw: 5e5, cancel: 21e3 };
   for (const [k, v] of Object.entries(ACTIONS)) $("mAction").add(new Option(v, k));
   function drawManual() {
     const a = $("mAction").value;
