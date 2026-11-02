@@ -63,8 +63,9 @@ export class Scanner {
       return;
     }
     this.deviceId = deviceId || this.stream.getVideoTracks()[0]?.getSettings?.().deviceId || null;
+    // iOS Safari needs these set before the stream is attached, or the video won't play inline.
+    this.video.setAttribute("playsinline", ""); this.video.setAttribute("muted", ""); this.video.muted = true;
     this.video.srcObject = this.stream;
-    this.video.setAttribute("playsinline", ""); this.video.muted = true;
     await this.video.play().catch(() => {});
     this.running = true; this.onState(true);
     let last = 0, pass = 0;

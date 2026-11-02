@@ -10,7 +10,33 @@ export function notice(el, tone, html) {
   el.dataset.tone = tone || "";
   el.innerHTML = html;
 }
-export const errMsg = (e) => esc((e && (e.shortMessage || e.message)) || String(e));
+export const errMsg = (e) => {
+  const m = String((e && (e.shortMessage || e.message)) || e);
+  return esc(m.charAt(0).toUpperCase() + m.slice(1));
+};
+
+// Tap a QR code to show it full screen on white: easier for a camera to read at a distance.
+export function enableQrZoom() {
+  document.addEventListener("click", (e) => {
+    const cv = e.target.closest && e.target.closest(".qrbox canvas.qr");
+    if (!cv) return;
+    const lay = document.createElement("div");
+    lay.className = "qrzoom";
+    lay.setAttribute("role", "dialog");
+    lay.setAttribute("aria-label", "QR code, full screen. Tap to close.");
+    const img = document.createElement("canvas");
+    img.width = cv.width; img.height = cv.height;
+    img.getContext("2d").drawImage(cv, 0, 0);
+    const tip = document.createElement("p");
+    tip.textContent = "Tap anywhere to close";
+    lay.append(img, tip);
+    const close = () => { lay.remove(); removeEventListener("keydown", onKey); };
+    const onKey = (k) => { if (k.key === "Escape") close(); };
+    lay.addEventListener("click", close);
+    addEventListener("keydown", onKey);
+    document.body.append(lay);
+  });
+}
 
 export function kvRows(rows) {
   return rows.map(([k, v, sub, mono]) =>

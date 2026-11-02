@@ -41,7 +41,7 @@ async function decodeCanvasQR(page, sel) {
   await server.listen(8545);
   const prov = new ethers.JsonRpcProvider("http://localhost:8545", 50, { staticNetwork: true, cacheTimeout: -1 });
   const F = new ethers.Wallet(funder.privateKey, prov);
-  const { V, T: TK } = compile();
+  const { V, T: TK, B: BT } = compile();
 
   // Deploy the validator normally, then copy its code and storage to 0x…88.
   const v = await new ethers.ContractFactory(V.abi, V.bytecode, F).deploy([C1, C2], [X(100), X(100)], T.address, X(100), X(25), 108, 4, 2);
@@ -99,7 +99,7 @@ async function decodeCanvasQR(page, sel) {
     await on.waitForFunction(() => { const m = document.querySelector("#prepMsg"); return m && !m.hidden && !m.querySelector(".spinner"); });
     const tone = await on.$eval("#prepMsg", (m) => m.dataset.tone);
     const text = await on.textContent("#prepMsg");
-    if (opts.expectError) { assert.equal(tone, "error", text); assert.match(text, opts.expectError); return null; }
+    if (opts.expectError) { assert.equal(tone, "error", text); assert.match(text, new RegExp(opts.expectError.source, "i")); return null; }
     assert.notEqual(tone, "error", text);
     if (opts.shot) await (await on.$("#g3")).screenshot({ path: `${SHOTS}/online-request-${action}.png` });
     return decodeCanvasQR(on, "#reqQr canvas");
@@ -213,6 +213,13 @@ async function decodeCanvasQR(page, sel) {
   assert.equal(await tok.balanceOf(T.address), 0n);
   assert.equal(await tok.balanceOf(R), 50_000_000n);
   console.log("✓ token transfer and token send-all");
+  const bad = await new ethers.ContractFactory(BT.abi, BT.bytecode, F).deploy(T.address, X(5)); await bad.waitForDeployment();
+  await prepare("token", async () => { await on.uncheck("#tokAll"); await on.fill("#tokAddr", await bad.getAddress()); await on.click("#tokLoad"); await on.waitForFunction(() => /Your balance/.test(document.querySelector("#tokInfo").textContent)); await on.fill("#tokTo", R); await on.fill("#tokAmt", "1"); }, { expectError: /returned false/ });
+  console.log("✓ token whose transfer returns false is refused before signing");
+
+  // 6a. A comma amount is refused, never read as thousands
+  await prepare("send", async () => { await on.fill("#sendTo", R); await on.fill("#sendAmt", "1,5"); }, { expectError: /no commas/ });
+  console.log("✓ amount with a comma is refused");
 
   // 6. Send 1.5 XDC
   before = await prov.getBalance(R);
@@ -263,6 +270,9 @@ async function decodeCanvasQR(page, sel) {
   const rBefore = await prov.getBalance(R);
   const stuck = await Tw.sendTransaction({ to: R, value: X(1), nonce: stuckNonce, gasPrice: gpNet, gasLimit: 21000, type: 0, chainId: 50 });
   await on.click("#load"); await on.waitForFunction(() => /pending/.test(document.querySelector("#sNonce").textContent));
+  await prepare("send", async () => { await on.check("#sendAll"); await on.fill("#sendTo", R); }, { expectError: /still waiting to be mined/ });
+  await on.uncheck("#sendAll");
+  console.log("✓ send-all refused while an earlier transaction is pending");
   q = await prepare("cancel", async () => {
     await on.waitForFunction(() => /waiting to be mined/.test(document.querySelector("#cancelInfo").textContent));
     assert.equal(await on.inputValue("#cnNonce"), String(stuckNonce));
@@ -285,12 +295,38 @@ async function decodeCanvasQR(page, sel) {
   await on.click("#bcClear");
   console.log("✓ cancel: stuck transfer replaced; recipient received nothing");
 
+  // 8e. Nonce gap: a transaction queued behind a missing nonce; an ordinary send fills the gap
+  const lat = await prov.getTransactionCount(T.address, "latest");
+  const rB = await prov.getBalance(R);
+  await prov.send("miner_stop", []);
+  await prov.send("eth_sendRawTransaction", [await T.signTransaction({ to: R, value: X(2), nonce: lat + 1, gasPrice: gpNet, gasLimit: 21000, type: 0, chainId: 50 })]); // skips nonce `lat`
+  await prov.send("miner_start", []);
+  await on.click("#load"); await on.waitForFunction(() => /behind a gap/.test(document.querySelector("#sNonce").textContent));
+  assert.match(await on.textContent("#sNonce"), new RegExp("^" + lat + " "));
+  q = await prepare("send", async () => { await on.fill("#sendTo", R); await on.fill("#sendAmt", "0.5"); });
+  assert.equal(JSON.parse(q).nonce, lat, "fills the gap rather than queueing behind it");
+  raw = await signOffline(q, "Send XDC");
+  await broadcast(raw, "Send XDC");
+  for (let i = 0; i < 20 && (await prov.getTransactionCount(T.address, "latest")) < lat + 2; i++) await new Promise((r) => setTimeout(r, 300));
+  assert.equal(await prov.getTransactionCount(T.address, "latest"), lat + 2);
+  assert.equal(await prov.getBalance(R) - rB, X(2.5));
+  console.log("✓ nonce gap: page uses the missing nonce, which releases the queued transaction");
+
   // 8. Send everything -> exactly zero
   q = await prepare("send", async () => { await on.check("#sendAll"); await on.fill("#sendTo", R); }, { shot: true });
   raw = await signOffline(q, "Send all XDC", { shot: "sendall" });
   await broadcast(raw, "Send all XDC", { shot: "sendall" });
   assert.equal(await bal(), 0n, "wallet should be exactly empty");
   console.log("✓ send all: wallet balance is exactly 0");
+
+  // 8f. Loading a different key clears any QR signed by the previous one
+  await off.click('#reqSeg button[data-tab="paste"]'); await off.fill("#pasteIn", q); await off.click("#pasteUse");
+  await off.click("#signBtn"); await off.waitForSelector("#out:not([hidden])");
+  await off.click("#forget"); await off.fill("#pkIn", ethers.Wallet.createRandom().privateKey); await off.click("#pkLoad");
+  assert.ok(await off.isHidden("#out"), "old signed QR must be cleared");
+  assert.equal((await off.textContent("#sigRaw")).trim(), "");
+  await off.click("#forget"); await off.fill("#pkIn", T.privateKey); await off.click("#pkLoad");
+  console.log("✓ switching keys clears the previous signed QR");
 
   // 9. Wrong key is refused offline
   await off.click("#forget");

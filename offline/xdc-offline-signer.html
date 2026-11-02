@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-zQeXTIBTq0B0/sXvzb2gZ+WOqdUyz0vTAk61K+Nl42Y='; style-src 'unsafe-inline'; img-src data: blob:; media-src blob: mediastream:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-DJHaG4N9p/CjnRS2xOgTZOi7hyMuBCIlnB4A0rvM/WY='; style-src 'unsafe-inline'; img-src data: blob:; media-src blob: mediastream:; connect-src 'none'; form-action 'none'; base-uri 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="license" content="MIT">
-  <title>XDC Offline Signer 1.1.0</title>
+  <title>XDC Offline Signer 1.1.3</title>
   <style>/* ---- Shared XDC Outpost tokens ---- */
 :root {
   --night: #1E1A4A; --deep: #19163F; --dusk: #2B2566; --line: #443D84;
@@ -179,6 +179,12 @@ ul.checks li.warn::before { content: "!"; color: var(--amber); text-align: cente
 .qrbox { display: grid; gap: 0.75rem; justify-items: center; padding: clamp(0.75rem, 3vw, 1.25rem); background: var(--night); border: 1px solid var(--line); border-radius: 14px; }
 .qrbox .qr { width: min(100%, 26rem); height: auto; image-rendering: pixelated; border-radius: 6px; background: #fff; }
 .qrbox.big .qr { width: min(100%, 34rem); }
+.qrbox canvas.qr { cursor: zoom-in; }
+.qrzoom { position: fixed; inset: 0; z-index: 60; background: #fff; display: grid; place-items: center; align-content: center; gap: 1rem; padding: 3vmin; cursor: zoom-out; }
+.qrzoom canvas { width: min(94vw, 86vh); height: auto; image-rendering: pixelated; }
+.qrzoom p { margin: 0; color: #444; font-size: 0.9rem; }
+.pgroup { margin: 0.25rem 0 -0.35rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mist); }
+#picker { display: grid; gap: 0.75rem; }
 .qrbox .cap { margin: 0; color: var(--mist); font-size: 0.875rem; text-align: center; }
 .rawhex { white-space: pre-wrap; font-family: var(--mono); font-size: 0.75rem; word-break: break-all; color: var(--mist); max-height: 8rem; overflow: auto; margin: 0; padding: 0.6rem 0.75rem; background: var(--night); border: 1px solid var(--line); border-radius: 8px; width: 100%; }
 
@@ -263,7 +269,7 @@ ul.checks li { grid-template-columns: 1.4rem minmax(0, 1fr); }
     <div class="wrap">
       <div class="crumbs topbar">
         <span class="brand"><svg aria-hidden="true"><use href="#i-beacon"/></svg>XDC Offline Signer</span>
-        <span class="ver">v1.1.0</span>
+        <span class="ver">v1.1.3</span>
       </div>
       <span class="netpill" id="netPill"><span class="dot"></span><span id="netText">No network</span></span>
     </div>
@@ -471,7 +477,7 @@ ul.checks li { grid-template-columns: 1.4rem minmax(0, 1fr); }
                 <button type="button" role="tab" data-tab="unsigned" aria-controls="oUnsigned" aria-selected="false">Unsigned</button>
               </div>
               <div id="oSigned" role="tabpanel" class="group-body">
-                <div class="qrbox big"><div id="sigQr"></div><p class="cap">Signed transaction. Hash <span class="hash" id="sigHash"></span></p></div>
+                <div class="qrbox big"><div id="sigQr"></div><p class="cap">Signed transaction. Hash <span class="hash" id="sigHash"></span></p><p class="cap">Click the code to show it full screen.</p></div>
                 <pre class="rawhex" id="sigRaw"></pre>
               </div>
               <div id="oUnsigned" role="tabpanel" class="group-body" hidden>
@@ -492,7 +498,7 @@ ul.checks li { grid-template-columns: 1.4rem minmax(0, 1fr); }
 
   <footer class="site-footer">
     <div class="wrap">
-      <p>XDC Offline Signer v1.1.0 · MIT licence · by s4njk4n · xdcoutpost.xyz</p>
+      <p>XDC Offline Signer v1.1.3 · MIT licence · by s4njk4n · xdcoutpost.xyz</p>
       <p>SHA-256 of this file is published with each release.</p>
     </div>
   </footer>
@@ -13406,7 +13412,9 @@ ul.checks li { grid-template-columns: 1.4rem minmax(0, 1fr); }
     return frac ? `${whole}.${frac}` : whole;
   }
   function parseUnits(str, decimals = 18) {
-    const s = String(str).trim().replace(/[,_\s]/g, "");
+    const raw = String(str).trim();
+    if (raw.includes(",")) throw new Error("use a dot for decimals and no commas, for example 1500.25");
+    const s = raw.replace(/[_\s]/g, "");
     if (!/^\d+(\.\d+)?$/.test(s) && !/^\.\d+$/.test(s)) throw new Error("enter a number like 1500 or 0.25");
     const [w, f = ""] = s.split(".");
     if (f.length > decimals) throw new Error(`at most ${decimals} decimal places`);
@@ -13845,7 +13853,14 @@ ul.checks li { grid-template-columns: 1.4rem minmax(0, 1fr); }
           summary = `Withdraws the unlocked stake recorded at block ${call.args.blockNumber} (entry #${call.args.index}) back to your wallet.`;
           rows.push(["Unlock block", call.args.blockNumber.toString()]);
           rows.push(["Queue index", call.args.index.toString()]);
-          if (ctx.info && ctx.info.amount) rows.push(["Expected payout", X(toBig(ctx.info.amount)), ctx.infoVerified ? "read from the chain" : "as stated by the online page, not verified offline"]);
+          if (ctx.info && ctx.info.amount) {
+            let amt = null;
+            try {
+              amt = toBig(ctx.info.amount);
+            } catch {
+            }
+            if (amt !== null) rows.push(["Expected payout", X(amt), ctx.infoVerified ? "read from the chain" : "as stated by the online page, not verified offline"]);
+          }
           if (tx.value) warnings.push("Withdraw should not carry any XDC, but this one sends " + X(tx.value) + ".");
           break;
         case "uploadKYC":
@@ -18944,9 +18959,10 @@ zoo`.split("\n");
         return;
       }
       this.deviceId = deviceId || this.stream.getVideoTracks()[0]?.getSettings?.().deviceId || null;
-      this.video.srcObject = this.stream;
       this.video.setAttribute("playsinline", "");
+      this.video.setAttribute("muted", "");
       this.video.muted = true;
+      this.video.srcObject = this.stream;
       await this.video.play().catch(() => {
       });
       this.running = true;
@@ -19004,7 +19020,37 @@ zoo`.split("\n");
     el.dataset.tone = tone || "";
     el.innerHTML = html;
   }
-  var errMsg = (e) => escapeHtml(e && (e.shortMessage || e.message) || String(e));
+  var errMsg = (e) => {
+    const m = String(e && (e.shortMessage || e.message) || e);
+    return escapeHtml(m.charAt(0).toUpperCase() + m.slice(1));
+  };
+  function enableQrZoom() {
+    document.addEventListener("click", (e) => {
+      const cv = e.target.closest && e.target.closest(".qrbox canvas.qr");
+      if (!cv) return;
+      const lay = document.createElement("div");
+      lay.className = "qrzoom";
+      lay.setAttribute("role", "dialog");
+      lay.setAttribute("aria-label", "QR code, full screen. Tap to close.");
+      const img = document.createElement("canvas");
+      img.width = cv.width;
+      img.height = cv.height;
+      img.getContext("2d").drawImage(cv, 0, 0);
+      const tip = document.createElement("p");
+      tip.textContent = "Tap anywhere to close";
+      lay.append(img, tip);
+      const close = () => {
+        lay.remove();
+        removeEventListener("keydown", onKey);
+      };
+      const onKey = (k) => {
+        if (k.key === "Escape") close();
+      };
+      lay.addEventListener("click", close);
+      addEventListener("keydown", onKey);
+      document.body.append(lay);
+    });
+  }
   function kvRows(rows) {
     return rows.map(
       ([k, v, sub, mono]) => `<tr><th scope="row">${escapeHtml(k)}</th><td${mono ? ' class="mono"' : ""}>${escapeHtml(v)}${sub ? `<span class="sub">${escapeHtml(sub)}</span>` : ""}</td></tr>`
@@ -19038,6 +19084,7 @@ zoo`.split("\n");
   }
 
   // src/offline.js
+  enableQrZoom();
   var S = {
     priv: null,
     // Uint8Array, in memory only
@@ -19085,7 +19132,9 @@ zoo`.split("\n");
     $("mnShow").textContent = m ? "Show words" : "Hide words";
   });
   function setKey(priv, how, root = null) {
+    const changed = !S.priv || privToAddress(priv) !== S.addr;
     forgetKey(true, root);
+    if (changed) clearOutput();
     S.priv = priv;
     S.addr = privToAddress(priv);
     S.how = how;
@@ -19394,7 +19443,8 @@ zoo`.split("\n");
       if (!S.priv || S.addr !== b.from) throw new Error("the loaded key does not match the request");
       const { raw, hash } = signTx(b.tx, S.priv);
       const d = decodeRawTx(raw);
-      if (d.from !== b.from || d.tx.nonce !== b.tx.nonce || d.tx.value !== b.tx.value || d.tx.data !== b.tx.data || d.tx.chainId !== b.tx.chainId)
+      const same = ["nonce", "gasPrice", "gasLimit", "value", "chainId"].every((k) => d.tx[k] === b.tx[k]);
+      if (d.from !== b.from || !same || d.tx.to !== b.tx.to || d.tx.data !== b.tx.data)
         throw new Error("self-check failed after signing; nothing was output");
       const uns = unsignedRaw(b.tx);
       showQR($("sigQr"), raw, { px: 8 });

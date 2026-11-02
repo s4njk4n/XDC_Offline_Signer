@@ -2,7 +2,8 @@
 import * as C from "./core.js";
 import { decryptKeystore, PATHS, seedFrom, derive, findAccount, addresses, checkPath, wipe } from "./keys.js";
 import { showQR, Scanner } from "./qr.js";
-import { $, esc, notice, errMsg, renderReview, setTabs } from "./ui.js";
+import { $, esc, notice, errMsg, enableQrZoom, renderReview, setTabs } from "./ui.js";
+enableQrZoom();
 
 const S = {
   priv: null,        // Uint8Array, in memory only
@@ -47,7 +48,9 @@ $("mnShow").addEventListener("click", () => {
 });
 
 function setKey(priv, how, root = null) {
+  const changed = !S.priv || C.privToAddress(priv) !== S.addr;
   forgetKey(true, root);
+  if (changed) clearOutput(); // never leave a QR signed by a different key on screen
   S.priv = priv; S.addr = C.privToAddress(priv); S.how = how; S.root = root;
   $("keyAddr").textContent = C.toXdc(S.addr);
   $("keyHow").textContent = how;
@@ -292,7 +295,8 @@ $("signBtn").addEventListener("click", () => {
     const { raw, hash } = C.signTx(b.tx, S.priv);
     // Verify our own output before showing it.
     const d = C.decodeRawTx(raw);
-    if (d.from !== b.from || d.tx.nonce !== b.tx.nonce || d.tx.value !== b.tx.value || d.tx.data !== b.tx.data || d.tx.chainId !== b.tx.chainId)
+    const same = ["nonce", "gasPrice", "gasLimit", "value", "chainId"].every((k) => d.tx[k] === b.tx[k]);
+    if (d.from !== b.from || !same || d.tx.to !== b.tx.to || d.tx.data !== b.tx.data)
       throw new Error("self-check failed after signing; nothing was output");
     const uns = C.unsignedRaw(b.tx);
     showQR($("sigQr"), raw, { px: 8 });

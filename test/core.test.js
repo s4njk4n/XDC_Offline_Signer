@@ -15,7 +15,9 @@ assert.equal(C.FUNCS.resign.selector, iface.getFunction("resign").selector);
 console.log("resign selector", C.FUNCS.resign.selector);
 
 // 2. units / addresses
-assert.equal(C.parseUnits("1,234.5"), 1234500000000000000000n);
+assert.equal(C.parseUnits("1234.5"), 1234500000000000000000n);
+for (const s of ["12,5", "1,500", "0,25"]) assert.throws(() => C.parseUnits(s), /no commas/);
+assert.equal(C.parseUnits("1 500.5"), 1500500000000000000000n);
 assert.equal(C.formatUnits(1234500000000000000000n), "1,234.5");
 assert.equal(C.formatUnits(1n), "0.000000000000000001");
 assert.throws(() => C.parseUnits("1.0000000000000000001"));
@@ -90,6 +92,9 @@ const legacy = await w.signTransaction({ type: 0, nonce: 0, gasPrice: 1, gasLimi
 assert.throws(() => C.decodeRawTx(legacy), /without a chain ID/);
 assert.throws(() => C.buildFromRequest({ xdcsign:1, chain:50, from: addr, nonce:0, gasPrice:"1", gas:21000, action:"kyc", args:{hash:"has space"} }), /KYC reference/);
 assert.throws(() => C.buildFromRequest({ xdcsign:1, chain:50, from: addr, nonce:0, gasPrice:"1", gas:30000, action:"cancel", args:{} }), /21,000/);
+// a malformed display-only info value can't break the review
+const wtx = C.buildFromRequest(C.makeRequest({ chainId: 50, from: addr, nonce: 1, gasPrice: 1n, gasLimit: 300000, action: "withdraw", args: { blockNumber: 5n, index: 0 } })).tx;
+assert.equal(C.describeTx(wtx, { info: { amount: "not a number" } }).kind, "withdraw");
 // tampered string padding is rejected by the decoder
 const kd = C.encodeCall("uploadKYC", ["abc"]); assert.ok(C.decodeCall(kd).args);
 assert.ok(C.decodeCall(kd.slice(0, -2) + "01").error);

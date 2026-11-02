@@ -151,16 +151,22 @@
             <p>The network checks each one before you sign, so problems such as too little stake or a locked withdrawal show up now rather than after broadcasting.</p>
           </div>
           <div class="group-body">
-            <div class="picker" id="picker">
-              <button type="button" data-a="send" aria-pressed="false"><b>Send XDC</b><small>Any amount, or everything in the wallet</small></button>
-              <button type="button" data-a="token" aria-pressed="false"><b>Send tokens</b><small>XRC-20, any amount or the full balance</small></button>
-              <button type="button" data-a="vote" aria-pressed="false"><b>Vote</b><small>Stake XDC on a masternode candidate</small></button>
-              <button type="button" data-a="unvote" aria-pressed="false"><b>Unvote</b><small>Take stake off a candidate</small></button>
-              <button type="button" data-a="withdraw" aria-pressed="false"><b>Withdraw</b><small>Collect stake after its unlock delay</small></button>
-              <button type="button" data-a="resign" aria-pressed="false"><b>Resign</b><small>Retire a masternode you own</small></button>
-              <button type="button" data-a="propose" aria-pressed="false"><b>Propose</b><small>Register a new masternode candidate</small></button>
-              <button type="button" data-a="kyc" aria-pressed="false"><b>Upload KYC</b><small>Record a KYC hash before a first proposal</small></button>
-              <button type="button" data-a="cancel" aria-pressed="false"><b>Cancel stuck</b><small>Replace a pending transaction</small></button>
+            <div id="picker">
+              <p class="pgroup">Wallet</p>
+              <div class="picker">
+                <button type="button" data-a="send" aria-pressed="false"><b>Send XDC</b><small>Any amount, or everything in the wallet</small></button>
+                <button type="button" data-a="token" aria-pressed="false"><b>Send tokens</b><small>XRC-20, any amount or the full balance</small></button>
+                <button type="button" data-a="cancel" aria-pressed="false"><b>Cancel stuck</b><small>Replace a pending transaction</small></button>
+              </div>
+              <p class="pgroup">Masternode</p>
+              <div class="picker">
+                <button type="button" data-a="vote" aria-pressed="false"><b>Vote</b><small>Stake XDC on a masternode candidate</small></button>
+                <button type="button" data-a="unvote" aria-pressed="false"><b>Unvote</b><small>Take stake off a candidate</small></button>
+                <button type="button" data-a="withdraw" aria-pressed="false"><b>Withdraw</b><small>Collect stake after its unlock delay</small></button>
+                <button type="button" data-a="resign" aria-pressed="false"><b>Resign</b><small>Retire a masternode you own</small></button>
+                <button type="button" data-a="propose" aria-pressed="false"><b>Propose</b><small>Register a new masternode candidate</small></button>
+                <button type="button" data-a="kyc" aria-pressed="false"><b>Upload KYC</b><small>Record a KYC hash before a first proposal</small></button>
+              </div>
             </div>
             <p class="hint" id="pickHint">Load your wallet first.</p>
 
@@ -276,7 +282,7 @@
           <div class="group-body">
             <p class="hint" id="reqEmpty">Prepare a transaction first.</p>
             <div id="reqOut" hidden class="group-body">
-              <div class="qrbox big"><div id="reqQr"></div><p class="cap" id="reqCap"></p></div>
+              <div class="qrbox big"><div id="reqQr"></div><p class="cap" id="reqCap"></p><p class="cap">Tap the code to show it full screen.</p></div>
               <details class="settings">
                 <summary>Details for typing</summary>
                 <table class="kv"><tbody id="reqKv"></tbody></table>

@@ -2,7 +2,8 @@
 // requests, verifies signed transactions and broadcasts them. Never sees a key.
 import * as C from "./core.js";
 import { showQR, Scanner, scanImageFile } from "./qr.js";
-import { $, esc, notice, errMsg, renderReview, kvRows, copyText } from "./ui.js";
+import { $, esc, notice, errMsg, enableQrZoom, renderReview, kvRows, copyText } from "./ui.js";
+enableQrZoom();
 
 $("year").textContent = new Date().getFullYear();
 
@@ -187,13 +188,13 @@ async function refreshAccount() {
   ]);
   S.latestNonce = BigInt(latest);
   S.pool = await poolFor(S.addr);
-  let pendingNonce = BigInt(nonce);
-  for (const n of S.pool.keys()) if (n + 1n > pendingNonce) pendingNonce = n + 1n;
+  const pendingNonce = nextNonce(BigInt(nonce), S.latestNonce, S.pool);
+  S.gapAfter = [...S.pool.keys()].filter((n) => n > pendingNonce).sort((a, b) => (a < b ? -1 : 1));
   if (Number(cid) !== S.chainId) throw new Error(`the RPC ${esc(rpcUrl())} is for chain ID ${Number(cid)}, not ${S.chainId}. Fix it under Network settings.`);
   S.balance = BigInt(bal); S.nonce = pendingNonce; S.gasPrice = BigInt(gp); S.block = BigInt(bn);
   $("sBal").textContent = X(S.balance);
   const waiting = S.nonce - S.latestNonce;
-  $("sNonce").textContent = S.nonce.toString() + (waiting > 0n ? ` (${waiting} pending)` : "");
+  $("sNonce").textContent = S.nonce.toString() + (waiting > 0n ? ` (${waiting} pending)` : "") + (S.gapAfter && S.gapAfter.length ? ` · ${S.gapAfter.length} waiting behind a gap` : "");
   $("sGas").textContent = `${C.formatUnits(S.gasPrice, 9)} gwei`;
   $("acct").hidden = false;
 }
@@ -215,6 +216,7 @@ async function loadAccount() {
     $("pickHint").hidden = !!S.action;
     $("pickHint").textContent = "Pick one to continue.";
     if (S.action) pick(S.action);
+    if (!S.scrolledOnce) { S.scrolledOnce = true; $("g2").scrollIntoView({ behavior: "smooth", block: "start" }); }
   } catch (e) { notice($("acctMsg"), "error", errMsg(e)); }
   finally { $("load").disabled = false; }
 }
@@ -232,7 +234,7 @@ function pick(a) {
   if (!S.addr || S.balance === null) { $("pickHint").hidden = false; $("pickHint").textContent = "Load your wallet in step 1 first."; return; }
   $("pickHint").hidden = true;
   for (const id of new Set(Object.values(PANEL))) $(id).hidden = id !== PANEL[a];
-  $("adv").hidden = false; $("prepActs").hidden = a === "withdraw";
+  $("adv").hidden = a === "cancel"; $("prepActs").hidden = a === "withdraw";
   $("prep").className = a === "resign" ? "btn btn-danger" : "btn btn-primary";
   if (PANEL[a] === "f-cand") setupCand();
   if (a === "withdraw") loadWithdrawals();
@@ -245,7 +247,7 @@ function pick(a) {
 async function kycStatus() {
   const [cnt, owned] = await Promise.all([
     vcall(C.encodeView(C.VIEWS.getHashCount, ["address"], [S.addr])).then(C.decUint),
-    vcall(C.encodeView(C.VIEWS.ownerToCandidate, ["address", "uint256"], [S.addr, 0n])).then(() => true, () => false),
+    vcall(C.encodeView(C.VIEWS.ownerToCandidate, ["address", "uint256"], [S.addr, 0n])).then(() => true, (e) => { if (e instanceof RpcError) return false; throw e; }),
   ]);
   let latest = "";
   if (cnt > 0n) latest = await vcall(C.encodeView(C.VIEWS.getLatestKYC, ["address"], [S.addr])).then(C.decString).catch(() => "");
@@ -267,6 +269,9 @@ function setupKyc() {
   }).catch(() => {});
 }
 
+// XDC RPCs can return addresses with an "xdc" prefix in JSON fields; compare in 0x form.
+const hexAddr = (a) => String(a || "").toLowerCase().replace(/^xdc/, "0x");
+
 // ---- Pending transactions. Sources, best first: the node's transaction pool (txpool_contentFrom /
 // txpool_content, often disabled on public RPCs), the pending block, then the "pending" nonce count.
 async function poolFor(addr) {
@@ -279,16 +284,23 @@ async function poolFor(addr) {
   } catch {}
   try {
     const r = await rpc("txpool_content", []);
-    for (const part of [r && r.pending, r && r.queued]) for (const [a, byNonce] of Object.entries(part || {})) if (a.toLowerCase() === addr) take(byNonce);
+    for (const part of [r && r.pending, r && r.queued]) for (const [a, byNonce] of Object.entries(part || {})) if (hexAddr(a) === addr) take(byNonce);
   } catch {}
   return out;
+}
+// Next usable nonce: the unbroken run of pool transactions after the last mined one. Transactions
+// queued behind a gap don't count; the next transaction must fill the gap.
+function nextNonce(rpcPending, latest, pool) {
+  let n = latest;
+  while (pool.has(n)) n++;
+  return n > rpcPending ? n : rpcPending;
 }
 async function findPending(nonce, addr = S.addr) {
   const pool = await poolFor(addr);
   if (pool.has(nonce)) return pool.get(nonce);
   try {
     const b = await rpc("eth_getBlockByNumber", ["pending", true]);
-    const t = b && (b.transactions || []).find((x) => x.from && x.from.toLowerCase() === addr && BigInt(x.nonce) === nonce);
+    const t = b && (b.transactions || []).find((x) => x.from && hexAddr(x.from) === addr && BigInt(x.nonce) === nonce);
     if (t) return { gasPrice: BigInt(t.gasPrice), hash: t.hash };
   } catch {}
   return null;
@@ -297,6 +309,11 @@ async function setupCancel() {
   const waiting = S.nonce - S.latestNonce;
   $("cnNonce").value = S.latestNonce.toString();
   $("cnGp").value = C.formatUnits(S.gasPrice * 2n, 9, false);
+  if (S.gapAfter && S.gapAfter.length) {
+    $("cnNonce").value = S.nonce.toString();
+    $("cancelInfo").innerHTML = `There is a <b>gap</b>: transaction(s) with nonce ${S.gapAfter.join(", ")} are waiting for nonce <b>${S.nonce}</b>, which was never sent. Sending anything with nonce ${S.nonce}, including this cancel or any normal transaction, fills the gap and lets them through. Only cancel them if you don't want them to happen.`;
+    return;
+  }
   if (waiting <= 0n) { $("cancelInfo").innerHTML = "This RPC sees <b>no pending transactions</b> from this wallet, so there's nothing to cancel. If you broadcast through a different RPC, it may not have reached this one."; return; }
   $("cancelInfo").innerHTML = `<b>${waiting} transaction(s)</b> from this wallet are waiting to be mined (nonce ${S.latestNonce}${waiting > 1n ? ` to ${S.nonce - 1n}` : ""}). The first one blocks the rest.`;
   const f = await findPending(S.latestNonce);
@@ -389,9 +406,10 @@ $("findMine").addEventListener("click", async () => {
     const owners = await callMany(rows.map((r) => ({ to: C.VALIDATOR, data: C.encodeView(C.VIEWS.getCandidateOwner, ["address"], [r.c]) })));
     rows.forEach((r, i) => (r.own = owners[i] && C.decAddr(owners[i]) === S.addr));
     if (S.action === "resign") rows = rows.filter((r) => r.own);
-    if (!rows.length) { box.innerHTML = `<p class="notice">${S.action === "resign" ? "This wallet doesn't own any active candidate." : "This wallet has no stake on any active candidate."}</p>`; return; }
+    const resignedNote = S.action === "resign" ? "" : " Candidates that have resigned are no longer listed by the contract; if you still have stake on one, enter its address above to unvote it.";
+    if (!rows.length) { box.innerHTML = `<p class="notice">${S.action === "resign" ? "This wallet doesn't own any active candidate." : "This wallet has no stake on any active candidate."}${resignedNote}</p>`; return; }
     box.innerHTML = `<table class="list"><thead><tr><th>Candidate</th><th>Your stake</th><th></th></tr></thead><tbody>${rows.map((r) =>
-      `<tr><td class="mono">${esc(C.toXdc(r.c))}${r.own ? ' <span class="kind kind-ok">owner</span>' : ""}</td><td>${esc(X(r.mine))}</td><td><button type="button" class="btn btn-ghost btn-small" data-use="${r.c}">Use</button></td></tr>`).join("")}</tbody></table>`;
+      `<tr><td class="mono">${esc(C.toXdc(r.c))}${r.own ? ' <span class="kind kind-ok">owner</span>' : ""}</td><td>${esc(X(r.mine))}</td><td><button type="button" class="btn btn-ghost btn-small" data-use="${r.c}">Use</button></td></tr>`).join("")}</tbody></table>${resignedNote ? `<p class="hint">${resignedNote.trim()}</p>` : ""}`;
     box.querySelectorAll("[data-use]").forEach((b) => b.addEventListener("click", () => {
       $("cand").value = C.toXdc(b.dataset.use); box.hidden = true;
       lookupCand().catch((e) => ($("candInfo").innerHTML = `<span style="color:var(--flare)">${errMsg(e)}</span>`));
@@ -460,6 +478,7 @@ async function prepare(extra = {}) {
       const isContract = code && code !== "0x";
       if ($("sendAll").checked) {
         action = "sendAll";
+        if (S.nonce > S.latestNonce && o.nonce === null) throw new Error(`this wallet has ${S.nonce - S.latestNonce} transaction(s) still waiting to be mined. They will change the balance, so a send-everything prepared now would fail. Wait until they are mined (or cancel them), then prepare again.`);
         gasLimit = o.gl || (isContract ? await estimate(to, 1n, "0x") : 21000n);
         const fee = gasLimit * gasPrice;
         if (S.balance <= fee) throw new Error(`the balance (${X(S.balance)}) doesn't cover the network fee (${X(fee)})`);
@@ -485,6 +504,8 @@ async function prepare(extra = {}) {
       if (amt > S.token.balance) throw new Error(`not enough ${t.symbol}: the balance is ${C.formatUnits(S.token.balance, t.decimals)}`);
       to = t.addr; data = C.encodeCall("transfer", [rcpt, amt]);
       gasLimit = o.gl || await estimate(to, 0n, data);
+      const ret = await rpc("eth_call", [{ from: S.addr, to, data }, "latest"]).catch(() => "0x");
+      if (ret && ret.length >= 66 && C.decUint(ret) === 0n) throw new Error("the token contract says this transfer would not go through (transfer returned false)");
       if (gasLimit * gasPrice > S.balance) throw new Error(`the wallet needs about ${X(gasLimit * gasPrice)} for the network fee but holds ${X(S.balance)}`);
       args = { token: t.addr, to: rcpt, amount: amt, decimals: t.decimals, symbol: t.symbol, ...($("tokAll").checked ? { all: true } : {}) };
     }
@@ -546,7 +567,8 @@ async function prepare(extra = {}) {
     else if (action === "cancel") {
       const n = C.toBig($("cnNonce").value, "nonce");
       if (n < S.latestNonce) throw new Error(`nonce ${n} is already used (mined); the oldest pending nonce is ${S.latestNonce}`);
-      if (n >= S.nonce) warn.push(`No pending transaction with nonce ${n} is visible on this RPC, so this will simply be a 0 XDC transfer to yourself.`);
+      if (n >= S.nonce && S.gapAfter && S.gapAfter.length && n === S.nonce) warn.push(`Nonce ${n} is the missing one, so this fills the gap: the transactions waiting behind it (nonce ${S.gapAfter.join(", ")}) will then go through. To stop those as well, cancel each of them afterwards.`);
+      else if (n >= S.nonce) warn.push(`No pending transaction with nonce ${n} is visible on this RPC, so this will simply be a 0 XDC transfer to yourself.`);
       const gp = C.parseUnits($("cnGp").value, 9);
       if (gp === 0n) throw new Error("enter a gas price");
       gasLimit = 21000n; to = S.addr;
@@ -567,6 +589,7 @@ async function prepare(extra = {}) {
 
     if (gasLimit * gasPrice > S.balance && action !== "sendAll") throw new Error(`the wallet can't cover the network fee of up to ${X(gasLimit * gasPrice)}`);
     let nonce = S.nonce;
+    if (S.nonce > S.latestNonce && o.nonce === null) warn.push(`This wallet has ${S.nonce - S.latestNonce} transaction(s) still waiting to be mined, so this one (nonce ${S.nonce}) will go through only after them.`);
     if (o.nonce !== null) {
       if (o.nonce < S.latestNonce) throw new Error(`nonce ${o.nonce} is already used; the next unused one is ${S.latestNonce}`);
       if (o.nonce < S.nonce) warn.push(`Nonce ${o.nonce} belongs to a pending transaction. This replaces it only if the gas price is at least 10% higher than the pending one's.`);
@@ -609,7 +632,7 @@ const LABELS = {
 function showRequest(req, built) {
   const text = JSON.stringify(req);
   showQR($("reqQr"), text, { ecc: "L", px: 8 });
-  const desc = C.describeTx(built.tx, { meta: built.meta, token: built.meta.token });
+  const desc = C.describeTx(built.tx, { from: built.from, meta: built.meta, token: built.meta.token });
   $("reqCap").textContent = `${desc.title}: ${desc.summary}`;
   const rows = [
     ["Network", `${C.NETS[req.chain].name} (${req.chain})`], ["Transaction", C.ACTIONS[req.action]],
@@ -644,6 +667,9 @@ $("sigImg").addEventListener("change", async (e) => {
 });
 $("sigUse").addEventListener("click", () => checkSigned($("sigPaste").value));
 $("bcClear").addEventListener("click", clearChecked);
+document.addEventListener("click", (e) => {
+  if (e.target && e.target.id === "again") { clearChecked(); $("g2").scrollIntoView({ behavior: "smooth", block: "start" }); }
+});
 
 function clearChecked() {
   S.checked = null; $("review").hidden = true; $("bcActs").hidden = true; notice($("bcMsg")); notice($("sigMsg"));
@@ -684,8 +710,7 @@ async function checkSigned(text) {
       rpc("eth_getBalance", [from, "latest"]).then(BigInt), rpc("eth_getTransactionCount", [from, "pending"]).then(BigInt),
       rpc("eth_getTransactionCount", [from, "latest"]).then(BigInt), tx.to ? rpc("eth_getCode", [tx.to, "latest"]) : "0x",
     ]);
-    let pend = pend0;
-    for (const n of (await poolFor(from)).keys()) if (n + 1n > pend) pend = n + 1n;
+    const pend = nextNonce(pend0, latest, await poolFor(from));
 
     // Compare with what this browser prepared
     const prep = tryPrepared();
@@ -740,8 +765,10 @@ async function checkSigned(text) {
     // Simulate
     if (tx.to && (code !== "0x" || tx.data !== "0x")) {
       try {
-        await rpc("eth_call", [{ from, to: tx.to, value: hex(tx.value), data: tx.data, gas: hex(tx.gasLimit) }, "latest"]);
-        checks.push({ tone: "ok", text: "The network ran a dry run of this transaction and it succeeds." });
+        const ret = await rpc("eth_call", [{ from, to: tx.to, value: hex(tx.value), data: tx.data, gas: hex(tx.gasLimit) }, "latest"]);
+        if (call_ && call_.name === "transfer" && ret && ret.length >= 66 && C.decUint(ret) === 0n)
+          checks.push({ tone: "bad", text: "The network's dry run shows the token contract would refuse this transfer (it returns false), so no tokens would move." });
+        else checks.push({ tone: "ok", text: "The network ran a dry run of this transaction and it succeeds." });
       } catch (e) {
         if (e instanceof RpcError) checks.push({ tone: "bad", text: `The network's dry run says this transaction would fail (${e.message}). Broadcasting would still cost the fee.` });
         else checks.push({ tone: "warn", text: "Couldn't run a dry run of this transaction." });
@@ -776,10 +803,11 @@ $("bcBtn").addEventListener("click", async () => {
     notice($("bcMsg"), "", `<span class="progress"><span class="spinner"></span><span>Broadcast. Waiting for it to be mined… ${link}</span></span>`);
     $("g4").classList.add("done");
     clearPrepared();
+    $("nonceIn").value = ""; $("gpIn").value = ""; $("glIn").value = "";
     let receipt = null;
     for (let i = 0; i < 45 && !receipt; i++) { await sleep(2000); receipt = await rpc("eth_getTransactionReceipt", [hash]).catch(() => null); }
     if (!receipt) notice($("bcMsg"), "warn", `Broadcast, not mined yet. Follow it on the explorer: ${link}`);
-    else if (Number(receipt.status) === 1) notice($("bcMsg"), "ok", `<strong>Done.</strong> ${esc(c.desc.title)} confirmed in block ${Number(receipt.blockNumber)}. ${link}`);
+    else if (Number(receipt.status) === 1) notice($("bcMsg"), "ok", `<strong>Done.</strong> ${esc(c.desc.title)} confirmed in block ${Number(receipt.blockNumber)}. ${link}<br><button type="button" class="btn btn-ghost btn-small" id="again" style="margin-top:0.6rem">Start another transaction</button>`);
     else notice($("bcMsg"), "error", `<strong>The transaction was mined but failed</strong> (reverted). The fee was spent. ${link}`);
     if (S.addr && S.addr === c.d.from) refreshAccount().then(() => { if (S.action === "withdraw") loadWithdrawals(); }).catch(() => {});
   } catch (e) {

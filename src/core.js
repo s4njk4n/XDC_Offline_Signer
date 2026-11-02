@@ -88,9 +88,12 @@ export function formatUnits(v, decimals = 18, group = true) {
   return frac ? `${whole}.${frac}` : whole;
 }
 
-// "1,234.5" -> base units. Rejects more decimals than the token has.
+// "1234.5" -> base units. Rejects more decimals than the token has.
+// Commas are refused outright: "12,5" means 12.5 in many countries but 125 in others.
 export function parseUnits(str, decimals = 18) {
-  const s = String(str).trim().replace(/[,_\s]/g, "");
+  const raw = String(str).trim();
+  if (raw.includes(",")) throw new Error("use a dot for decimals and no commas, for example 1500.25");
+  const s = raw.replace(/[_\s]/g, "");
   if (!/^\d+(\.\d+)?$/.test(s) && !/^\.\d+$/.test(s)) throw new Error("enter a number like 1500 or 0.25");
   const [w, f = ""] = s.split(".");
   if (f.length > decimals) throw new Error(`at most ${decimals} decimal places`);
@@ -577,7 +580,11 @@ export function describeTx(tx, ctx = {}) {
         summary = `Withdraws the unlocked stake recorded at block ${call.args.blockNumber} (entry #${call.args.index}) back to your wallet.`;
         rows.push(["Unlock block", call.args.blockNumber.toString()]);
         rows.push(["Queue index", call.args.index.toString()]);
-        if (ctx.info && ctx.info.amount) rows.push(["Expected payout", X(toBig(ctx.info.amount)), ctx.infoVerified ? "read from the chain" : "as stated by the online page, not verified offline"]);
+        if (ctx.info && ctx.info.amount) {
+          let amt = null;
+          try { amt = toBig(ctx.info.amount); } catch {}
+          if (amt !== null) rows.push(["Expected payout", X(amt), ctx.infoVerified ? "read from the chain" : "as stated by the online page, not verified offline"]);
+        }
         if (tx.value) warnings.push("Withdraw should not carry any XDC, but this one sends " + X(tx.value) + ".");
         break;
       case "uploadKYC":
