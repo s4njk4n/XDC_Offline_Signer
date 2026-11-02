@@ -1,0 +1,30 @@
+{
+  "name": "xdc-offline-signer",
+  "version": "1.1.0",
+  "description": "Sign XDC transactions on an airgapped computer; prepare and broadcast from your phone by QR code",
+  "scripts": {
+    "test": "node test/core.test.js && node test/keys.test.js",
+    "build": "node build.mjs",
+    "test:e2e": "node test/compile.cjs && node test/e2e.cjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@noble/ciphers": "^1.3.0",
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.8.0",
+    "@scure/bip32": "^1.7.0",
+    "@scure/bip39": "^1.6.0",
+    "jsqr": "^1.4.0",
+    "qrcode-generator": "^2.0.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "ethers": "^6.17.0",
+    "ganache": "^7.9.2",
+    "pngjs": "^7.0.0",
+    "solc": "^0.4.24"
+  },
+  "type": "module"
+}

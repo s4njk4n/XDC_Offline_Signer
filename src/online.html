@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XDC Offline Signer: send, vote, unvote, resign and withdraw with an airgapped key | XDC Outpost</title>
+  <meta name="license" content="MIT">
+  <meta name="description" content="Move XDC, XRC-20 tokens and masternode stake with a private key that never touches the internet. Prepare the transaction on your phone, sign it on an airgapped computer, scan it back and broadcast. Vote, unvote, resign, withdraw, send and send-all.">
+  <link rel="canonical" href="https://xdcoutpost.xyz/XDC_Offline_Signer/">
+  <meta name="theme-color" content="#1E1A4A">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://xdcoutpost.xyz/XDC_Offline_Signer/">
+  <meta property="og:title" content="XDC Offline Signer">
+  <meta property="og:description" content="Sign XDC and masternode transactions on an airgapped computer. Prepare and broadcast from your phone by QR code.">
+  <meta property="og:image" content="https://xdcoutpost.xyz/assets/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@s4njk4n">
+  <link rel="preload" href="/assets/fonts/bricolage.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <style>
+    @font-face { font-family: "Bricolage"; src: url("/assets/fonts/bricolage.woff2") format("woff2-variations"); font-weight: 200 800; font-stretch: 75% 100%; font-display: swap; }
+    @font-face { font-family: "Instrument Sans"; src: url("/assets/fonts/instrument-sans.woff2") format("woff2-variations"); font-weight: 400 700; font-stretch: 75% 100%; font-display: swap; }
+    /*__CSS__*/
+    .scanlay { position: fixed; inset: 0; z-index: 50; background: rgb(15 12 40 / 0.96); display: grid; grid-template-rows: auto 1fr auto; gap: 0.75rem; padding: 1rem var(--gutter) calc(1rem + env(safe-area-inset-bottom)); }
+    .scanlay h2 { margin: 0; font-size: 1.2rem; font-weight: 700; }
+    .scanlay .cam { aspect-ratio: auto; max-height: none; height: 100%; }
+    .stat { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.5rem; }
+    .stat div { background: var(--night); border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.8rem; min-width: 0; }
+    .stat small { display: block; color: var(--mist); font-size: 0.78rem; font-weight: 600; }
+    .stat b { font-variant-numeric: tabular-nums; font-weight: 650; word-break: break-all; }
+    .infoline { font-size: 0.9rem; color: var(--mist); margin: 0; }
+    .infoline b { color: var(--ink); font-weight: 600; }
+    .dl { display: grid; gap: 0.9rem; }
+    .dl .sha { font-family: var(--mono); font-size: 0.75rem; word-break: break-all; color: var(--mist); }
+  </style>
+  <script src="/assets/analytics.js"></script>
+</head>
+<body>
+  <a class="skip" href="#app" style="position:absolute;left:-999px">Skip to the signer</a>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-beacon" viewBox="0 0 32 32">
+      <path d="M11 29 L16 11 L21 29 M12.6 23 H19.4 M13.8 18 H18.2" fill="none" stroke="#C3B8EA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="16" cy="7.5" r="3" fill="#FF9EBB"/>
+      <path d="M9.5 4.5 A9 9 0 0 0 9.5 10.5 M22.5 4.5 A9 9 0 0 1 22.5 10.5" fill="none" stroke="#FF9EBB" stroke-width="1.75" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.040-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.930 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></symbol>
+    <symbol id="i-telegram" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.910.177-.184 3.247-2.977 3.307-3.230.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.830-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></symbol>
+    <symbol id="i-discord" viewBox="0 0 24 24"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z"/></symbol>
+  </svg>
+
+  <header class="site-header">
+    <div class="wrap">
+      <div class="crumbs">
+        <a class="brand" href="/"><svg aria-hidden="true"><use href="#i-beacon"/></svg>XDC Outpost</a>
+        <span class="sep" aria-hidden="true">/</span>
+        <span class="here">Offline Signer</span>
+      </div>
+      <nav class="site-nav" aria-label="Main">
+        <a href="/#tools">All tools</a>
+        <a class="wide" href="#get">Get the signer</a>
+        <a class="wide" href="https://github.com/s4njk4n/XDC_Offline_Signer" target="_blank" rel="noopener" data-goatcounter-click="github/XDC_Offline_Signer">Source code</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="title">
+      <div class="wrap hero-grid">
+        <div>
+          <p class="eyebrow">For masternode operators and anyone holding XDC on a raw private key</p>
+          <h1 id="title">Keep the key offline. Still move your XDC.</h1>
+          <p class="lede">Prepare a transaction on this page, sign it on an airgapped computer running the offline signer, then scan the signed transaction back here and broadcast it. Send XDC or XRC-20 tokens, empty a wallet exactly, and vote, unvote, resign or withdraw masternode stake. Your private key never meets the internet.</p>
+          <ul class="facts" aria-label="Key facts">
+            <li><span class="kind kind-web">Phone web page</span></li>
+            <li><span class="kind kind-ok">Offline signer file</span></li>
+            <li><span class="kind kind-quiet">QR codes both ways</span></li>
+            <li><span class="kind kind-quiet">Clear signing on both devices</span></li>
+          </ul>
+          <div class="actions">
+            <a class="btn btn-primary" href="#app">Start</a>
+            <a class="btn btn-ghost" href="#get">Get the offline signer</a>
+          </div>
+        </div>
+        <aside class="panel" aria-label="How it works">
+          <h2>How a transaction travels</h2>
+          <p>Each device does only what it is safe for it to do.</p>
+          <ol class="flow">
+            <li><span class="ico">1</span><span><span class="who on">This page, online</span>Reads your nonce, balance and the gas price. You choose what to do.</span></li>
+            <li><span class="ico">2</span><span><span class="who on">This page → signer</span>Shows a QR code. The offline computer scans it with its webcam.</span></li>
+            <li><span class="ico">3</span><span><span class="who off">Offline signer</span>Builds the transaction itself, shows you exactly what it does, and signs it.</span></li>
+            <li><span class="ico">4</span><span><span class="who off">Signer → this page</span>Shows the signed transaction as a QR code. Scan it here.</span></li>
+            <li><span class="ico">5</span><span><span class="who on">This page, online</span>Decodes it again, checks it against the chain, and broadcasts it when you confirm.</span></li>
+          </ol>
+        </aside>
+      </div>
+    </section>
+
+    <section class="steps" id="app" aria-label="Offline signer companion">
+      <div class="wrap">
+
+        <!-- 1 -->
+        <div class="group" id="g1">
+          <div class="group-head">
+            <span class="step-no">1</span>
+            <h2>Your wallet</h2>
+            <p>Enter the address that holds the funds, or scan its QR code from the offline signer. Nothing here can spend from it.</p>
+          </div>
+          <div class="group-body">
+            <div class="field">
+              <label for="net">Network</label>
+              <select id="net"><option value="50">XDC Mainnet</option><option value="51">XDC Apothem Testnet</option></select>
+            </div>
+            <div class="field">
+              <label for="addr">Wallet address</label>
+              <div class="inline">
+                <input id="addr" class="mono" spellcheck="false" autocomplete="off" placeholder="xdc…">
+                <button type="button" class="btn btn-ghost" id="addrScan" aria-label="Scan address QR"><svg aria-hidden="true"><use href="#i-scan"/></svg>Scan</button>
+              </div>
+            </div>
+            <div class="actions"><button type="button" class="btn btn-primary" id="load">Load wallet</button></div>
+            <details class="settings">
+              <summary>Network settings</summary>
+              <div class="field">
+                <label for="rpcIn">RPC endpoint</label>
+                <div class="inline">
+                  <input type="url" id="rpcIn" class="mono" spellcheck="false" autocomplete="off">
+                  <button type="button" class="btn btn-ghost" id="rpcBtn">Use</button>
+                </div>
+                <p class="hint" id="rpcHint"></p>
+              </div>
+            </details>
+            <div id="acct" hidden class="group-body">
+              <div class="stat">
+                <div><small>Balance</small><b id="sBal">–</b></div>
+                <div><small>Next nonce</small><b id="sNonce">–</b></div>
+                <div><small>Gas price</small><b id="sGas">–</b></div>
+              </div>
+            </div>
+            <p class="notice" id="acctMsg" hidden></p>
+          </div>
+        </div>
+
+        <!-- 2 -->
+        <div class="group" id="g2">
+          <div class="group-head">
+            <span class="step-no">2</span>
+            <h2>Choose a transaction</h2>
+            <p>The network checks each one before you sign, so problems such as too little stake or a locked withdrawal show up now rather than after broadcasting.</p>
+          </div>
+          <div class="group-body">
+            <div class="picker" id="picker">
+              <button type="button" data-a="send" aria-pressed="false"><b>Send XDC</b><small>Any amount, or everything in the wallet</small></button>
+              <button type="button" data-a="token" aria-pressed="false"><b>Send tokens</b><small>XRC-20, any amount or the full balance</small></button>
+              <button type="button" data-a="vote" aria-pressed="false"><b>Vote</b><small>Stake XDC on a masternode candidate</small></button>
+              <button type="button" data-a="unvote" aria-pressed="false"><b>Unvote</b><small>Take stake off a candidate</small></button>
+              <button type="button" data-a="withdraw" aria-pressed="false"><b>Withdraw</b><small>Collect stake after its unlock delay</small></button>
+              <button type="button" data-a="resign" aria-pressed="false"><b>Resign</b><small>Retire a masternode you own</small></button>
+              <button type="button" data-a="propose" aria-pressed="false"><b>Propose</b><small>Register a new masternode candidate</small></button>
+              <button type="button" data-a="kyc" aria-pressed="false"><b>Upload KYC</b><small>Record a KYC hash before a first proposal</small></button>
+              <button type="button" data-a="cancel" aria-pressed="false"><b>Cancel stuck</b><small>Replace a pending transaction</small></button>
+            </div>
+            <p class="hint" id="pickHint">Load your wallet first.</p>
+
+            <!-- send -->
+            <div class="group-body" id="f-send" hidden>
+              <div class="field">
+                <label for="sendTo">Recipient</label>
+                <div class="inline"><input id="sendTo" class="mono" spellcheck="false" autocomplete="off" placeholder="xdc…"><button type="button" class="btn btn-ghost" data-scan-into="sendTo"><svg aria-hidden="true"><use href="#i-scan"/></svg>Scan</button></div>
+              </div>
+              <label class="check"><input type="checkbox" id="sendAll"><span><b>Send everything.</b> Sends the whole balance minus the exact network fee, leaving the wallet at zero.</span></label>
+              <div class="field" id="sendAmtF">
+                <label for="sendAmt">Amount</label>
+                <div class="amount"><input id="sendAmt" inputmode="decimal" autocomplete="off" placeholder="0.0"><span class="suffix sym">XDC</span></div>
+              </div>
+            </div>
+
+            <!-- token -->
+            <div class="group-body" id="f-token" hidden>
+              <div class="field">
+                <label for="tokAddr">Token contract</label>
+                <div class="inline"><input id="tokAddr" class="mono" spellcheck="false" autocomplete="off" placeholder="xdc…"><button type="button" class="btn btn-ghost" id="tokLoad">Look up</button></div>
+                <p class="infoline" id="tokInfo"></p>
+              </div>
+              <div class="field">
+                <label for="tokTo">Recipient</label>
+                <div class="inline"><input id="tokTo" class="mono" spellcheck="false" autocomplete="off" placeholder="xdc…"><button type="button" class="btn btn-ghost" data-scan-into="tokTo"><svg aria-hidden="true"><use href="#i-scan"/></svg>Scan</button></div>
+              </div>
+              <label class="check"><input type="checkbox" id="tokAll"><span><b>Send the full token balance.</b></span></label>
+              <div class="field" id="tokAmtF">
+                <label for="tokAmt">Amount</label>
+                <div class="amount"><input id="tokAmt" inputmode="decimal" autocomplete="off" placeholder="0.0"><span class="suffix" id="tokSym">tokens</span></div>
+              </div>
+            </div>
+
+            <!-- candidate (vote / unvote / resign) -->
+            <div class="group-body" id="f-cand" hidden>
+              <div class="field">
+                <label for="cand">Masternode candidate</label>
+                <div class="inline"><input id="cand" class="mono" spellcheck="false" autocomplete="off" placeholder="xdc…"><button type="button" class="btn btn-ghost" id="candLook">Look up</button></div>
+                <p class="infoline" id="candInfo"></p>
+              </div>
+              <div class="actions"><button type="button" class="btn btn-ghost btn-small" id="findMine">Find candidates I have stake on</button></div>
+              <div id="mineBox" hidden></div>
+              <div class="field" id="candAmtF">
+                <label for="candAmt" id="candAmtL">Amount</label>
+                <div class="amount"><input id="candAmt" inputmode="decimal" autocomplete="off" placeholder="0.0"><span class="suffix sym">XDC</span></div>
+                <div class="actions"><button type="button" class="btn btn-ghost btn-small" id="candMax" hidden>Use maximum</button></div>
+                <p class="hint" id="candAmtHint"></p>
+              </div>
+              <label class="check" id="resignChkL" hidden><input type="checkbox" id="resignChk"><span>I understand resigning is permanent. The node stops earning rewards, and the stake is locked for the candidate unlock delay before I can withdraw it.</span></label>
+            </div>
+
+            <!-- withdraw -->
+            <div class="group-body" id="f-withdraw" hidden>
+              <div id="wdBox"><p class="hint">Loading your withdrawal queue…</p></div>
+            </div>
+
+            <!-- propose -->
+            <div class="group-body" id="f-propose" hidden>
+              <div class="field">
+                <label for="propCand">Candidate (node) address</label>
+                <div class="inline"><input id="propCand" class="mono" spellcheck="false" autocomplete="off" placeholder="xdc…"><button type="button" class="btn btn-ghost" data-scan-into="propCand"><svg aria-hidden="true"><use href="#i-scan"/></svg>Scan</button></div>
+                <p class="hint">The coinbase address of your new masternode server, not this wallet.</p>
+              </div>
+              <div class="field">
+                <label for="propAmt">Stake</label>
+                <div class="amount"><input id="propAmt" inputmode="decimal" autocomplete="off"><span class="suffix sym">XDC</span></div>
+                <p class="hint" id="propHint"></p>
+              </div>
+            </div>
+
+            <!-- kyc -->
+            <div class="group-body" id="f-kyc" hidden>
+              <p class="infoline" id="kycInfo"></p>
+              <div class="field">
+                <label for="kycIn">KYC document reference</label>
+                <input id="kycIn" class="mono" spellcheck="false" autocomplete="off" placeholder="Qm…">
+                <p class="hint">Usually the IPFS hash of your KYC document, as issued by the XDC masternode onboarding process. It is stored publicly on the chain. Wallets that have owned a masternode before don't need this to propose again.</p>
+              </div>
+            </div>
+
+            <!-- cancel -->
+            <div class="group-body" id="f-cancel" hidden>
+              <p class="infoline" id="cancelInfo"></p>
+              <div class="row-2">
+                <div class="field"><label for="cnNonce">Nonce to replace</label><input id="cnNonce" inputmode="numeric" autocomplete="off"></div>
+                <div class="field"><label for="cnGp">New gas price</label><div class="amount"><input id="cnGp" inputmode="decimal" autocomplete="off"><span class="suffix">gwei</span></div></div>
+              </div>
+              <p class="hint">This sends 0 XDC from your wallet to itself with the stuck transaction's nonce. The network takes it in place of the stuck one only if its gas price is at least 10% higher. To replace a stuck transaction with a different one instead, prepare that one and set its nonce under Gas settings.</p>
+            </div>
+
+            <details class="settings" id="adv" hidden>
+              <summary>Gas settings</summary>
+              <div class="row-2">
+                <div class="field"><label for="gpIn">Gas price</label><div class="amount"><input id="gpIn" inputmode="decimal" autocomplete="off" placeholder="from network"><span class="suffix">gwei</span></div></div>
+                <div class="field"><label for="glIn">Gas limit</label><input id="glIn" inputmode="numeric" autocomplete="off" placeholder="estimated"></div>
+              </div>
+              <div class="field"><label for="nonceIn">Nonce</label><input id="nonceIn" inputmode="numeric" autocomplete="off" placeholder="next"></div>
+              <p class="hint" style="margin-top:0.6rem">Leave blank to use the wallet's next nonce, the network gas price and an estimated gas limit with a 25% margin. A plain XDC transfer to a wallet always uses exactly 21,000 gas.</p>
+            </details>
+            <div class="actions" id="prepActs" hidden><button type="button" class="btn btn-primary" id="prep">Prepare for signing</button></div>
+            <p class="notice" id="prepMsg" hidden></p>
+          </div>
+        </div>
+
+        <!-- 3 -->
+        <div class="group" id="g3">
+          <div class="group-head">
+            <span class="step-no">3</span>
+            <h2>Scan this with the offline signer</h2>
+            <p>On the offline computer, choose “Scan with webcam” in step 2 and hold this screen up to it. No webcam? Type the details below into “Enter by hand”.</p>
+          </div>
+          <div class="group-body">
+            <p class="hint" id="reqEmpty">Prepare a transaction first.</p>
+            <div id="reqOut" hidden class="group-body">
+              <div class="qrbox big"><div id="reqQr"></div><p class="cap" id="reqCap"></p></div>
+              <details class="settings">
+                <summary>Details for typing</summary>
+                <table class="kv"><tbody id="reqKv"></tbody></table>
+              </details>
+              <div class="actions">
+                <button type="button" class="btn btn-ghost btn-small" id="reqCopy">Copy request text</button>
+                <a class="btn btn-primary" href="#g4">I've signed it: scan the result</a>
+              </div>
+              <p class="hint">This request uses nonce <b id="reqNonce"></b>. If any other transaction is sent from this wallet before you broadcast, prepare it again.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 -->
+        <div class="group" id="g4">
+          <div class="group-head">
+            <span class="step-no">4</span>
+            <h2>Scan the signed transaction</h2>
+            <p>This page decodes the signed transaction from scratch, checks it against the chain, and shows you what it will do. Nothing is sent until you press Broadcast.</p>
+          </div>
+          <div class="group-body">
+            <div class="actions">
+              <button type="button" class="btn btn-primary" id="sigScan"><svg aria-hidden="true"><use href="#i-scan"/></svg>Scan signed transaction</button>
+              <label class="btn btn-ghost" for="sigImg">From a photo</label>
+              <input type="file" id="sigImg" accept="image/*" hidden>
+            </div>
+            <details class="settings">
+              <summary>Paste a signed transaction instead</summary>
+              <div class="field"><label for="sigPaste">Signed transaction hex</label><textarea id="sigPaste" spellcheck="false" placeholder="0xf8…"></textarea></div>
+              <div class="actions" style="margin-top:0.6rem"><button type="button" class="btn btn-ghost" id="sigUse">Check transaction</button></div>
+              <p class="hint" style="margin-top:0.6rem">Signed transactions from the old MyEtherWallet-based XDC offline wallet work here too.</p>
+            </details>
+            <p class="notice" id="sigMsg" hidden></p>
+            <div id="review" hidden></div>
+            <div class="actions" id="bcActs" hidden>
+              <button type="button" class="btn btn-primary" id="bcBtn">Broadcast transaction</button>
+              <button type="button" class="btn btn-ghost" id="bcClear">Clear</button>
+            </div>
+            <p class="notice" id="bcMsg" hidden></p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="know" id="get" aria-labelledby="get-title">
+      <div class="wrap">
+        <h2 id="get-title">Get the offline signer</h2>
+        <div class="know-grid">
+          <div class="dl">
+            <h3>One file, no installation</h3>
+            <p>The signer is a single HTML file of about 600 KB. It opens in any modern browser (Chrome, Firefox, Edge, Brave), contains every library it needs, and is blocked by its own security policy from making any network connection at all.</p>
+            <div class="actions"><a class="btn btn-primary" href="offline/xdc-offline-signer.html" download="xdc-offline-signer.html" data-goatcounter-click="download/offline-signer">Download signer v__VERSION__</a></div>
+            <p class="sha">SHA-256 __OFFLINE_SHA__</p>
+            <p>Check the SHA-256 before copying it across, against the value in <a href="https://github.com/s4njk4n/XDC_Offline_Signer/releases" target="_blank" rel="noopener">the GitHub release</a>. On Linux or macOS run <code>sha256sum xdc-offline-signer.html</code>; on Windows, <code>certutil -hashfile xdc-offline-signer.html SHA256</code>.</p>
+          </div>
+          <div>
+            <h3>Setting up the offline computer</h3>
+            <ol>
+              <li>Use a spare laptop with a webcam. Remove or disable its Wi-Fi and Bluetooth, and don't plug in a network cable.</li>
+              <li>For the strongest setup, boot a fresh Linux live USB (for example Ubuntu or Tails) rather than an everyday operating system.</li>
+              <li>Copy <code>xdc-offline-signer.html</code> across on a USB stick and open it in the browser. Allow the camera when asked.</li>
+              <li>Load your key, scan the request from this page, check what it shows, sign, and hold the phone up to the signed QR code.</li>
+              <li>Close the browser tab when finished. The key is held only in that tab's memory.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="know" id="know" aria-labelledby="know-title" style="border-top:1px solid var(--line)">
+      <div class="wrap">
+        <h2 id="know-title">Things to know</h2>
+        <div class="know-grid">
+          <div><h3>What each side checks</h3><p>The signer builds the transaction itself from your choices and describes what it signs from the transaction bytes, not from the label this page gave it. This page then decodes the signed transaction independently, recovers the sender from the signature, compares every field with what you prepared, and asks the network whether it would succeed.</p></div>
+          <div><h3>Nonces</h3><p>Every transaction from a wallet carries the next number in sequence. A request prepared here uses the wallet's next nonce. If anything else is sent from the wallet in the meantime, the signed transaction will be rejected harmlessly, so prepare it again.</p></div>
+          <div><h3>Sending everything</h3><p>A plain transfer to a wallet costs exactly 21,000 gas, so the signer can send the balance minus the fee and leave exactly zero. Masternode owner wallets receive rewards every epoch, so a reward landing between preparing and broadcasting stays behind as a small remainder.</p></div>
+          <div><h3>Unvote, then withdraw</h3><p>Unvoting and resigning don't pay anything out. They move the stake into your withdrawal queue with an unlock block. Once the chain passes that block, the Withdraw tab lists the entry as ready and you sign one Withdraw transaction per entry.</p></div>
+          <div><h3>Resigning</h3><p>Only the wallet that proposed the masternode can resign it. The candidate leaves the masternode set for good, and your own stake on it waits out the candidate unlock delay, which is longer than the voter delay. Other people's votes on it stay theirs to unvote.</p></div>
+          <div><h3>Tokens</h3><p>Token transfers pay their fee in XDC, so the wallet needs a little XDC as well. The token's symbol and decimals are read from the chain here and passed to the signer for display; the signer also shows the raw amount so you can confirm the decimals.</p></div>
+          <div><h3>Proposing a masternode</h3><p>Propose registers a server's coinbase address as a candidate, with this wallet as owner, and stakes at least the minimum candidate amount (read from the contract). Wallets that have owned a candidate before can propose again without new KYC. First-time owners upload a KYC reference first. To move a masternode to a new server, resign the old candidate and propose the new one; the old stake is withdrawable after the candidate unlock delay.</p></div>
+          <div><h3>Stuck transactions</h3><p>If a broadcast transaction sits unmined, for example because its gas price was too low, Cancel stuck sends 0 XDC to yourself with the same nonce and a higher gas price. Whichever is mined first wins, so at worst the cancel is rejected and costs nothing.</p></div>
+          <div><h3>Your choice of RPC</h3><p>Reads and broadcasts use the free public <a href="/go/plugin-rpc/?from=offline-signer" data-goatcounter-click="referral/plugin-rpc/offline-signer">Plugin XDC RPC</a> by default, with the XinFin public RPCs as fallbacks. Under Network settings you can use your own node. It's saved only in this browser.</p></div>
+          <div><h3>Transaction format</h3><p>Transactions are standard legacy XDC transactions with EIP-155 replay protection, so a signature for Mainnet (chain ID 50) can't be replayed on Apothem (51) or any other chain.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="contact" id="contact" aria-labelledby="contact-title">
+      <div class="wrap">
+        <div>
+          <h2 id="contact-title">Questions or ideas?</h2>
+          <p>Need another transaction type, help setting up an offline machine, or private RPC and node monitoring for your masternodes? Get in touch on whichever platform suits you.</p>
+        </div>
+        <ul class="channels">
+          <li><a href="https://t.me/s4njk4n" target="_blank" rel="noopener" data-goatcounter-click="contact/telegram"><svg aria-hidden="true"><use href="#i-telegram"/></svg><span class="name">Telegram</span><span class="handle">@s4njk4n</span></a></li>
+          <li><a href="https://discord.com/users/852434672793288724" target="_blank" rel="noopener" data-goatcounter-click="contact/discord"><svg aria-hidden="true"><use href="#i-discord"/></svg><span class="name">Discord</span><span class="handle">@s4njk4n</span></a></li>
+          <li><a href="https://x.com/s4njk4n" target="_blank" rel="noopener" data-goatcounter-click="contact/x"><svg aria-hidden="true"><use href="#i-x"/></svg><span class="name">X</span><span class="handle">@s4njk4n</span></a></li>
+          <li><a href="https://github.com/s4njk4n/XDC_Offline_Signer" target="_blank" rel="noopener" data-goatcounter-click="github/XDC_Offline_Signer"><svg aria-hidden="true"><use href="#i-github"/></svg><span class="name">GitHub</span><span class="handle">XDC Offline Signer</span></a></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <div class="scanlay" id="scanLay" hidden role="dialog" aria-modal="true" aria-labelledby="scanTitle">
+    <h2 id="scanTitle">Scan</h2>
+    <div class="cam"><video id="video" playsinline muted></video><div class="reticle"></div><div class="camtag"><span id="camState">Looking for a QR code…</span></div></div>
+    <div class="actions"><button type="button" class="btn btn-ghost btn-block" id="scanCancel">Cancel</button><select id="camSel" hidden aria-label="Camera"></select></div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>© <span id="year">2026</span> XDC Outpost, by <a href="https://github.com/s4njk4n?tab=repositories" target="_blank" rel="noopener" data-goatcounter-click="github/profile">s4njk4n</a>. Default RPC by <a href="/go/plugin-rpc/?from=offline-signer-footer" data-goatcounter-click="referral/plugin-rpc/offline-signer-footer">Plugin</a>. v__VERSION__</p>
+      <p><a href="/">More XDC tools</a></p>
+    </div>
+  </footer>
+<script>/*__JS__*/</script>
+</body>
+</html>

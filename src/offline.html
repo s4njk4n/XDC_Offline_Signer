@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src '__SCRIPT_HASH__'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob: mediastream:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="license" content="MIT">
+  <title>XDC Offline Signer __VERSION__</title>
+  <style>/*__CSS__*/
+    .topbar { display: flex; align-items: center; gap: 0.6rem; }
+    .ver { font-family: var(--mono); font-size: 0.8rem; color: var(--mist); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.55rem; }
+    .netpill { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; font-weight: 600; padding: 0.3rem 0.75rem; border-radius: 999px; border: 1px solid var(--ok); color: var(--ok); white-space: nowrap; }
+    .netpill.bad { border-color: var(--flare); color: var(--flare); }
+    .netpill .dot { background: currentColor; }
+    .banner { padding: 1.25rem 0 0.5rem; }
+    .banner h1 { font-weight: 750; font-stretch: 85%; font-size: clamp(1.9rem, 4vw, 2.75rem); letter-spacing: -0.02em; line-height: 1.05; margin: 0 0 0.5rem; }
+    .banner p { color: var(--mist); margin: 0; max-width: 46em; }
+    #onlineWarn { margin-top: 1rem; }
+    .keyaddr { font-family: var(--mono); font-size: 0.9rem; word-break: break-all; }
+    .mask { -webkit-text-security: disc; }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-beacon" viewBox="0 0 32 32">
+      <path d="M11 29 L16 11 L21 29 M12.6 23 H19.4 M13.8 18 H18.2" fill="none" stroke="#C3B8EA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="16" cy="7.5" r="3" fill="#FF9EBB"/>
+      <path d="M9.5 4.5 A9 9 0 0 0 9.5 10.5 M22.5 4.5 A9 9 0 0 1 22.5 10.5" fill="none" stroke="#FF9EBB" stroke-width="1.75" stroke-linecap="round"/>
+    </symbol>
+  </svg>
+
+  <header class="site-header">
+    <div class="wrap">
+      <div class="crumbs topbar">
+        <span class="brand"><svg aria-hidden="true"><use href="#i-beacon"/></svg>XDC Offline Signer</span>
+        <span class="ver">v__VERSION__</span>
+      </div>
+      <span class="netpill" id="netPill"><span class="dot"></span><span id="netText">No network</span></span>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap banner">
+      <h1>Sign XDC transactions on an offline computer</h1>
+      <p>This page is self-contained and cannot make any network connection, even if the computer is online. Your key stays in this browser tab's memory and is never saved. Close the tab when you are done.</p>
+      <p class="notice" data-tone="error" id="onlineWarn" hidden><strong>This computer reports a network connection.</strong> The page itself is blocked from using the network, but the safest setup is a computer whose Wi-Fi and Bluetooth are removed or disabled and which is never connected again.</p>
+    </div>
+
+    <section class="steps" aria-label="Signer">
+      <div class="wrap">
+
+        <!-- 1. Key -->
+        <div class="group" id="g1">
+          <div class="group-head">
+            <span class="step-no">1</span>
+            <h2>Load your key</h2>
+            <p>Use the private key, keystore file or recovery phrase of the wallet you are moving funds from.</p>
+          </div>
+          <div class="group-body">
+            <div id="keyForms">
+              <div class="seg" role="tablist" aria-label="Key type" id="keySeg">
+                <button type="button" role="tab" data-tab="pk" aria-controls="kPk" aria-selected="true">Private key</button>
+                <button type="button" role="tab" data-tab="ks" aria-controls="kKs" aria-selected="false">Keystore file</button>
+                <button type="button" role="tab" data-tab="mn" aria-controls="kMn" aria-selected="false">Recovery phrase</button>
+              </div>
+
+              <div id="kPk" role="tabpanel" class="group-body" style="margin-top:1rem">
+                <div class="field">
+                  <label for="pkIn">Private key</label>
+                  <div class="inline">
+                    <input type="password" id="pkIn" class="mono" autocomplete="off" spellcheck="false" placeholder="64 hex characters">
+                    <button type="button" class="btn btn-ghost" id="pkShow">Show</button>
+                  </div>
+                </div>
+                <div class="actions"><button type="button" class="btn btn-primary" id="pkLoad">Load key</button></div>
+              </div>
+
+              <div id="kKs" role="tabpanel" class="group-body" style="margin-top:1rem" hidden>
+                <div class="field">
+                  <label for="ksFile">Keystore file (UTC--… or .json)</label>
+                  <input type="file" id="ksFile">
+                </div>
+                <div class="field">
+                  <label for="ksPw">Keystore password</label>
+                  <input type="password" id="ksPw" autocomplete="off">
+                </div>
+                <div class="actions"><button type="button" class="btn btn-primary" id="ksLoad">Unlock keystore</button></div>
+              </div>
+
+              <div id="kMn" role="tabpanel" class="group-body" style="margin-top:1rem" hidden>
+                <div class="field">
+                  <label for="mnIn">Recovery phrase</label>
+                  <textarea id="mnIn" class="mask" autocomplete="off" spellcheck="false" rows="3" placeholder="12 or 24 words separated by spaces" style="font-family:var(--body);font-size:1rem"></textarea>
+                  <div class="actions"><button type="button" class="btn btn-ghost btn-small" id="mnShow">Show words</button></div>
+                </div>
+                <details class="settings">
+                  <summary>Passphrase and derivation path</summary>
+                  <div class="field">
+                    <label for="mnPass">BIP-39 passphrase / extra word (only if you set one)</label>
+                    <input type="password" id="mnPass" autocomplete="off">
+                  </div>
+                  <div class="field">
+                    <label for="mnPath">Derivation path</label>
+                    <select id="mnPath"></select>
+                  </div>
+                  <div class="field" id="mnCustomF" hidden>
+                    <label for="mnCustom">Custom path</label>
+                    <input id="mnCustom" class="mono" spellcheck="false" autocomplete="off" placeholder="m/44'/550'/0'/0">
+                    <p class="hint">Addresses are this path followed by /0, /1, /2… Put <code>i</code> where the account number goes if it isn't at the end, for example m/44'/60'/i'/0/0.</p>
+                  </div>
+                  <div class="row-2">
+                    <div class="field">
+                      <label for="mnIdx">Account index</label>
+                      <input type="number" id="mnIdx" min="0" value="0">
+                    </div>
+                    <div class="field">
+                      <label for="mnDepth">Addresses to search per path</label>
+                      <select id="mnDepth"><option value="20">First 20</option><option value="100">First 100</option><option value="500">First 500 (slower)</option></select>
+                    </div>
+                  </div>
+                  <p class="hint" style="margin-top:0.75rem">With a signing request loaded, the signer searches every path the XinFin web wallet has ever offered (32 of them), plus your custom path, for the request's address. Without one, it uses the path and index above.</p>
+                </details>
+                <div class="actions">
+                  <button type="button" class="btn btn-primary" id="mnLoad">Load from phrase</button>
+                  <button type="button" class="btn btn-ghost" id="mnBrowse">Browse addresses</button>
+                </div>
+                <div id="browse" hidden class="group-body">
+                  <p class="hint">Addresses only; no keys are shown. Pick the one that holds your funds.</p>
+                  <table class="list"><thead><tr><th>#</th><th>Address</th><th></th></tr></thead><tbody id="browseRows"></tbody></table>
+                  <div class="actions">
+                    <button type="button" class="btn btn-ghost btn-small" id="brPrev">Previous 10</button>
+                    <button type="button" class="btn btn-ghost btn-small" id="brNext">Next 10</button>
+                    <span class="hint" id="brPath"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="keyOn" hidden class="group-body">
+              <div class="wallet">
+                <div class="wallet-state on"><span class="dot"></span><span>Key loaded for <span class="keyaddr" id="keyAddr"></span></span></div>
+                <div class="actions">
+                  <button type="button" class="btn btn-ghost btn-small" id="addrQrBtn">Show address QR</button>
+                  <button type="button" class="btn btn-ghost btn-small" id="forget">Forget key</button>
+                </div>
+              </div>
+              <p class="hint" id="keyHow"></p>
+              <div class="qrbox" id="addrQrBox" hidden>
+                <div id="addrQr"></div>
+                <p class="cap">Scan this with the online page to fill in your address. It contains only your public address.</p>
+              </div>
+            </div>
+            <p class="notice" id="keyMsg" hidden></p>
+          </div>
+        </div>
+
+        <!-- 2. Request -->
+        <div class="group" id="g2">
+          <div class="group-head">
+            <span class="step-no">2</span>
+            <h2>Load the signing request</h2>
+            <p>The online page shows a QR code with your nonce, the gas price, and the transaction you chose. Scan it with this computer's webcam, or type the details in by hand.</p>
+          </div>
+          <div class="group-body">
+            <div class="seg" role="tablist" aria-label="How to load the request" id="reqSeg">
+              <button type="button" role="tab" data-tab="scan" aria-controls="rScan" aria-selected="true">Scan with webcam</button>
+              <button type="button" role="tab" data-tab="manual" aria-controls="rManual" aria-selected="false">Enter by hand</button>
+              <button type="button" role="tab" data-tab="paste" aria-controls="rPaste" aria-selected="false">Paste text</button>
+            </div>
+
+            <div id="rScan" role="tabpanel" class="group-body">
+              <div class="cam" id="cam" hidden>
+                <video id="video" playsinline muted></video>
+                <div class="reticle"></div>
+                <div class="camtag"><span id="camState">Looking for a QR code…</span></div>
+              </div>
+              <div class="actions">
+                <button type="button" class="btn btn-primary" id="camStart">Start webcam</button>
+                <button type="button" class="btn btn-ghost" id="camStop" hidden>Stop</button>
+                <select id="camSel" hidden style="width:auto;flex:1;min-width:12rem" aria-label="Camera"></select>
+              </div>
+              <p class="hint">Hold the phone 15–30 cm from the webcam and turn its screen brightness up. If the camera does not start, see “Camera access” in the README.</p>
+            </div>
+
+            <div id="rManual" role="tabpanel" class="group-body" hidden>
+              <p class="hint">Copy each value from the “Details for typing” list on the online page.</p>
+              <div class="row-2">
+                <div class="field"><label for="mNet">Network</label>
+                  <select id="mNet"><option value="50">XDC Mainnet (50)</option><option value="51">Apothem Testnet (51)</option></select></div>
+                <div class="field"><label for="mAction">Transaction</label><select id="mAction"></select></div>
+              </div>
+              <div class="field"><label for="mFrom">From address</label><input id="mFrom" class="mono" spellcheck="false" autocomplete="off" placeholder="xdc…"></div>
+              <div class="row-2">
+                <div class="field"><label for="mNonce">Nonce</label><input id="mNonce" type="text" inputmode="numeric" autocomplete="off"></div>
+                <div class="field"><label for="mGas">Gas limit</label><input id="mGas" type="text" inputmode="numeric" autocomplete="off"></div>
+              </div>
+              <div class="field"><label for="mGp">Gas price</label><div class="amount"><input id="mGp" type="text" inputmode="decimal" autocomplete="off"><span class="suffix">gwei</span></div></div>
+              <div id="mFields" class="group-body"></div>
+              <div class="actions"><button type="button" class="btn btn-primary" id="mUse">Review transaction</button></div>
+            </div>
+
+            <div id="rPaste" role="tabpanel" class="group-body" hidden>
+              <div class="field"><label for="pasteIn">Request text</label><textarea id="pasteIn" spellcheck="false" placeholder='{"xdcsign":1,…}'></textarea></div>
+              <div class="actions"><button type="button" class="btn btn-primary" id="pasteUse">Load request</button></div>
+            </div>
+            <p class="notice" id="reqMsg" hidden></p>
+          </div>
+        </div>
+
+        <!-- 3. Review -->
+        <div class="group" id="g3">
+          <div class="group-head">
+            <span class="step-no">3</span>
+            <h2>Check and sign</h2>
+            <p>This is decoded from the transaction that will be signed, not from what the online page said. Read it before signing.</p>
+          </div>
+          <div class="group-body">
+            <p class="hint" id="reviewEmpty">Load your key and a signing request first.</p>
+            <div id="review" hidden></div>
+            <label class="check" id="resignAck" hidden><input type="checkbox" id="resignChk"><span>I understand that resigning this masternode cannot be undone.</span></label>
+            <div class="actions" id="signActs" hidden>
+              <button type="button" class="btn btn-primary" id="signBtn">Sign transaction</button>
+              <button type="button" class="btn btn-ghost" id="discard">Discard request</button>
+            </div>
+            <p class="notice" id="signMsg" hidden></p>
+          </div>
+        </div>
+
+        <!-- 4. Output -->
+        <div class="group" id="g4">
+          <div class="group-head">
+            <span class="step-no">4</span>
+            <h2>Scan the signed transaction</h2>
+            <p>On the online page, open “Scan signed transaction” and point the phone at this code. The phone shows you what it does again before you broadcast it.</p>
+          </div>
+          <div class="group-body">
+            <p class="hint" id="outEmpty">Nothing signed yet.</p>
+            <div id="out" hidden class="group-body">
+              <div class="seg" role="tablist" aria-label="Transaction format" id="outSeg">
+                <button type="button" role="tab" data-tab="signed" aria-controls="oSigned" aria-selected="true">Signed (to broadcast)</button>
+                <button type="button" role="tab" data-tab="unsigned" aria-controls="oUnsigned" aria-selected="false">Unsigned</button>
+              </div>
+              <div id="oSigned" role="tabpanel" class="group-body">
+                <div class="qrbox big"><div id="sigQr"></div><p class="cap">Signed transaction. Hash <span class="hash" id="sigHash"></span></p></div>
+                <pre class="rawhex" id="sigRaw"></pre>
+              </div>
+              <div id="oUnsigned" role="tabpanel" class="group-body" hidden>
+                <div class="qrbox big"><div id="unsQr"></div><p class="cap">Unsigned transaction (EIP-155 signing form). It cannot be broadcast; use it to cross-check the contents with another tool.</p></div>
+                <pre class="rawhex" id="unsRaw"></pre>
+              </div>
+              <div class="actions">
+                <button type="button" class="btn btn-ghost" id="another">Sign another transaction</button>
+                <button type="button" class="btn btn-ghost" id="doneForget">Done: forget key</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>XDC Offline Signer v__VERSION__ · MIT licence · by s4njk4n · xdcoutpost.xyz</p>
+      <p>SHA-256 of this file is published with each release.</p>
+    </div>
+  </footer>
+<script>/*__JS__*/</script>
+</body>
+</html>
